@@ -1,0 +1,16 @@
+wandb_run: false
+seed: None
+base_dir: ../project
+daphne_dir: ../daphne
+recursion_limit: 5000
+deterministic_tests: []
+hoppl_deterministic_tests: []
+probabilistic_tests: []
+homework4_programs: []
+homework5_programs: []
+homework6_programs:
+- 4
+inference: SMC
+compile: false
+num_samples: 10000.0
+tmax: 60

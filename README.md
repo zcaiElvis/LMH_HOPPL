@@ -1,1 +1,1 @@
-# LMH_HOPPL
+# CPSC532W_hw6
