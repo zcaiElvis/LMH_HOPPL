@@ -19,7 +19,6 @@ def get_samples(ast:dict, num_samples:int, tmax=None, inference=None, wandb_name
         samples = get_importance_samples(ast, num_samples, tmax, wandb_name, verbose)
     elif inference == 'SMC':
         samples = get_SMC_samples(ast, num_samples, wandb_name, verbose)
-
     elif inference == "LMH":
         samples = get_LMH_samples(ast, num_samples, wandb_name, verbose)
     else:
