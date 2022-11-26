@@ -1,4 +1,4 @@
-from evaluator import eval, Env, standard_env
+from evaluator import eval, Env, standard_env, Procedure
 
 import torch as tc
 from pyrsistent import pmap, pset
@@ -11,139 +11,126 @@ import math
 def get_LMH_samples(ast: dict, num_samples: int, wandb_name:str,  verbose:bool,  run_name = "start"):
     env = standard_env()
     sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
-    output = lambda x: x
-    exp = eval(ast, sig, env, verbose)(run_name, output) ### First run
+    exp = eval(ast, sig, env, verbose)(run_name, lambda x : x) ### First run
     # exp = eval(ast, sig, env, verbose)
 
     D = pmap({}) ### Database for storing continuation and loglikelihood
     samples = lmh_sampler(exp, num_samples, D)
     
-
     return samples
 
 
-def run_until_vars_or_end(res, num_sample_states):
-    cont, args, sigma = res
-    if tc.equal(sigma['num_sample_state'], tc.tensor(1.)) and tc.equal(num_sample_states, tc.tensor(1.)): # If this is the first run
-        return [{'status':'sample'}, res]
-    res = cont(*args)
-    while type(res) is tuple:
-        # print(args)
-        if res[2]['type'] == 'sample':
-            return [{'status': 'sample'}, res]
-        elif res[2]['type'] == 'observe':
-            return [{'status': 'observe'}, res]
-
-        cont, args, sigma = res
-        res = cont(*args)
-
-    res = [{'status': 'done'}, res]
-    return res
 
 def trace_update(k, D = pmap({}), px=None, py = None):
     if px == None or py == None: px = tc.tensor(0.0); py = tc.tensor(0.0)
     
     names = []
-
-    done = False
-
-    num_sample_states = k[2]['num_sample_state']
+    num_sample_states = tc.tensor(0.0) # number of samples for this run, total num samples recorded in lmh_sampler instead
 
 
-    while(done == False):
-        status, k = run_until_vars_or_end(k, num_sample_states)
-        # skip = skip + 1
+    while isinstance(k, tuple):
 
-        if status['status'] == 'done':
-            done = True
-            sample = k
+        cont, args, sigma = k
+
+        if k[2]['type'] == "sample":
+            
+            x_k = args
+            name = sigma['address']
+            names.append(name)
+            dist_k = sigma['dist']
+
+            if name in D.keys(): # If already in dictionary
+                disk_d, l_d, _, _, px, py, _ = D[name]
+                if dist_k.params ==  disk_d.params:
+                    pass
+                    px = px + l_d
+                else:
+                    l = dist_k.log_prob(*x_k)
+                    
+                    # px = px + l
+                    # store px, py value before update
+                    D = D.update({name: [dist_k, l, x_k, k, px, py, num_sample_states]})
+                    px = px + l
+                    
+            else: # If not in dictionary
+                l = dist_k.log_prob(*x_k)
+                # px = px + l
+                D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
+                px = px + l
+
+            num_sample_states = num_sample_states + 1
+            k = cont(*args)
 
         else:
-            # k = {cont, args, sigma}
-            if status['status'] == 'sample':
-                x_k = k[1]
-                name = k[2]['address']
-                names.append(name)
-                dist_k = k[2]['dist']
-                num_sample_states = num_sample_states + 1
-                if name in D.keys(): # If already in dictionary
-                    disk_d, l_d, _, _, px, py, _ = D[name]
-                    if dist_k.params ==  disk_d.params:
-                        px = px + l_d
-                    else:
-                        l = dist_k.log_prob(*x_k)
-                        
-                        px = px + l
-                        # store px, py until and include seeing x_k
-                        D = D.update({name: [dist_k, l, x_k, k, px, py, num_sample_states]})
-                        
-                else: # If not in dictionary
-                    l = dist_k.log_prob(*x_k)
-                    px = px + l
-                    D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
+            dist_k = sigma['dist']
+            y_k = args
+            l = dist_k.log_prob(*y_k)
+            py = py + l
+            k = cont(*args)
 
-            elif status['status'] == 'observe':
-                dist_k = k[2]['dist']
-                y_k = k[1]
-                l = dist_k.log_prob(*y_k)
-                py = py + l
-
-            else:
-                raise Exception("Status not recognized:"+status['status'])
-
-    return px, py, sample, D, names, num_sample_states
+    return px, py, k, D, names, num_sample_states
+            
 
 
 
 def lmh_sampler(k, num_samples, D):
-    px_old, py_old, sample_old, D, names, num_sample_states_old = trace_update(k, D)
+    px_old, py_old, x_old, D, names, num_sample_states_old = trace_update(k, D)
 
     samples = []
-    prev_sample = sample_old
+
+    log_probs = []
 
     for i in range(num_samples):
+        
         # Pick any points along the trace
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
         target = names[rd_idx]
 
+
+        ##### Creating new trace and run #####
+
         # Look up the target sample in dictionary
-        dist_old, l_old, [x_old], k_old, px_mid, py_mid, num_sample_states_old = D[target]
+        dist_mid, l_mid, [x_mid], k_mid, px_mid, py_mid, num_sample_states_mid = D[target]
 
         # Resample at the target sample
-        x_new = dist_old.sample()
-        px_mid = px_mid - dist_old.log_prob(x_old) + dist_old.log_prob(x_new)
+        x_mid_new = dist_mid.sample()
+        l_mid_new = dist_mid.log_prob(x_mid_new)
 
         # Create new branch
-        k_new = [k_old[0], [x_new], k_old[2]]
-        D_new = D.set(target, [dist_old, l_old, [x_new], k_new, px_mid, py_mid, num_sample_states_old])
+        k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
+        D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
         # Run the program starting from the new x
-        px_new, py_new, sample_new, D_new, _, num_sample_states_new = trace_update(k_new, D_new, px_mid, py_mid)
+        px_new, py_new, x_new, D_new, _, num_sample_states_new = trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
 
-        ### TODO:Get number of samples in each trace
+        #######################################
 
-        print(num_sample_states_old - num_sample_states_new)
-        
-        rejection_new = (px_new+py_new)+ dist_old.log_prob(x_new) + tc.log(num_sample_states_old)
-        rejection_old = (px_old+py_old)+ dist_old.log_prob(x_old) + tc.log(num_sample_states_new)
 
-        # print(tc.exp(rejection_new-rejection_old))
-
+        rejection_new = (px_new+py_new)+ l_mid + tc.log(num_sample_states_old)
+        rejection_old = (px_old+py_old)+ l_mid_new + tc.log(num_sample_states_new + num_sample_states_mid)
 
         if tc.rand(1) < tc.exp(rejection_new - rejection_old):
             D = D_new
             px_old = px_new
             py_old = py_new
-            samples.append(sample_new)
-            prev_sample = sample_new
+            samples.append(x_new)
+            x_old = x_new
+            num_sample_states_old = num_sample_states_mid + num_sample_states_new
+            log_probs.append(px_new+py_new)
         else:
-            pass
-            samples.append(prev_sample)
+            samples.append(x_old)
+            log_probs.append(px_old+py_old)
 
     samples = samples[math.floor(0.2*len(samples)):]
 
+    plt.plot(log_probs)
+    plt.savefig('log_probs.png')
+    plt.close()
+
     plt.plot(samples)
     plt.savefig('samples.png')
+    plt.close()
+
 
     return samples
 
