@@ -43,6 +43,7 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]})
             px = px + l
             num_sample_states = num_sample_states + 1
+            cont.sig = cont.sig.set('type', None)
             k = cont(*args)
 
         elif k[2]['type'] == "observe":
@@ -50,6 +51,7 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             y_k = args
             l = dist_k.log_prob(*y_k)
             py = py + l
+            cont.sig = cont.sig.set('type', None)
             k = cont(*args)
 
         else:
@@ -85,6 +87,7 @@ def lmh_sampler(k, num_samples, D):
 
         # Create new branch
         k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
+        k_mid_new[0].sig = k_mid_new[0].sig.set('type', None)
         D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
         # Run the program starting from the new x
