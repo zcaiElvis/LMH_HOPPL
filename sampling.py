@@ -8,6 +8,7 @@ from evaluator import eval, evaluate, standard_env
 from utils import log_sample_to_wandb, log_samples_to_wandb
 from utils import resample_using_importance_weights, check_addresses
 from lmh_book import get_LMH_samples
+from psmc import get_PSMC_samples
 
 def get_samples(ast:dict, num_samples:int, tmax=None, inference=None, wandb_name=None, verbose=False):
     '''
@@ -21,6 +22,8 @@ def get_samples(ast:dict, num_samples:int, tmax=None, inference=None, wandb_name
         samples = get_SMC_samples(ast, num_samples, wandb_name, verbose)
     elif inference == "LMH":
         samples = get_LMH_samples(ast, num_samples, wandb_name, verbose)
+    elif inference =="PSMC":
+        samples = get_PSMC_samples(ast, num_samples, wandb_name, verbose)
     else:
         print('Inference scheme:', inference, type(inference))
         raise ValueError('Inference scheme not recognised')
@@ -49,9 +52,9 @@ def get_importance_samples(ast:dict, num_samples:int, tmax=None, wandb_name=None
     log_weights = []
     if (tmax is not None): max_time = time()+tmax
     for i in range(num_samples):
-        sigma = pmap({'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0})
+        # sigma = pmap({'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0})
         # sigma = {'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0}
-        sample, sigma = evaluate(ast, sigma, verbose=verbose)
+        sample, sigma = evaluate(ast, sig = None, verbose=verbose)
         if wandb_name is not None: log_sample_to_wandb(sample, i, wandb_name=wandb_name)
         samples.append(sample)
         log_weights.append(sigma['logW'])

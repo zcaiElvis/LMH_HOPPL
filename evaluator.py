@@ -108,7 +108,7 @@ def eval(e, sig:dict, env:Env, verbose=False):
         sig = sig.update({'type':"sample"})
         sig = sig.update({'num_sample_state': num_sample_statement+tc.tensor(1.)})
 
-        k.sig = sig
+        # k.sig = sig
 
         return k, [s], sig
 
@@ -124,7 +124,7 @@ def eval(e, sig:dict, env:Env, verbose=False):
         sig = sig.set('logW', logW+logp)
         sig = sig.set('type', 'observe')
         sig = sig.set('dist', d)
-        k.sig = sig
+        # k.sig = sig
 
       
         return k, [v], sig
@@ -154,7 +154,7 @@ def evaluate(ast:dict, sig=None, run_name='start', verbose=False):
         ast: abstract syntax tree
     Returns: The return value of the program
     '''
-    if sig is None: sig = pmap({'logW':tc.tensor(0.0), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
+    if sig is None: sig = pmap({'logW':tc.tensor(-10.0), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
     env = standard_env()
     output = lambda x: x 
     exp = eval(ast, sig, env, verbose)(run_name, output)

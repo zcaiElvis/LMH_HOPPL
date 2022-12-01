@@ -39,29 +39,8 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             name = sigma['address']
             names.append(name)
             dist_k = sigma['dist']
-
-            # if name in D.keys(): # If already in dictionary
-            #     disk_d, l_d, _, _, px, py, _ = D[name] # TODO: D shouldn't be accessed this way. px, py are the final pxpy values, need to also store intermediate ones
-            #     if dist_k.params ==  disk_d.params:
-            #         px = px + l_d
-            #         num_sample_states = num_sample_states + 1
-            #         k = cont(*args)
-            #     else:
-            #         l = dist_k.log_prob(*x_k)
-            #         D = D.update({name: [dist_k, l, x_k, k, px, py, num_sample_states]})
-            #         px = px + l
-            #         num_sample_states = num_sample_states + 1
-            #         k = cont(*args)
-
-                    
-            # else: # If not in dictionary
-            #     l = dist_k.log_prob(*x_k)
-            #     D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
-            #     px = px + l
-            #     num_sample_states = num_sample_states + 1
-            #     k = cont(*args)
             l = dist_k.log_prob(*x_k)
-            D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
+            D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]})
             px = px + l
             num_sample_states = num_sample_states + 1
             k = cont(*args)
@@ -131,13 +110,13 @@ def lmh_sampler(k, num_samples, D):
 
     samples = samples[math.floor(0.2*len(samples)):]
 
-    plt.plot(log_probs)
-    plt.savefig('log_probs.png')
-    plt.close()
+    # plt.plot(log_probs)
+    # plt.savefig('log_probs.png')
+    # plt.close()
 
-    plt.plot(samples)
-    plt.savefig('samples.png')
-    plt.close()
+    # plt.plot(samples)
+    # plt.savefig('samples.png')
+    # plt.close()
 
 
     return samples
