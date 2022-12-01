@@ -10,8 +10,8 @@ import math
 
 def get_LMH_samples(ast: dict, num_samples: int, wandb_name:str,  verbose:bool,  run_name = "start"):
     env = standard_env()
-    sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
-    # sig = {'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)}
+    # sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
+    sig = {'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0), 'dist':None}
     exp = eval(ast, sig, env, verbose)(run_name, lambda x : x) ### First run
     # exp = eval(ast, sig, env, verbose)
 
@@ -33,7 +33,7 @@ def trace_update(k, D = pmap({}), px=None, py = None):
 
         cont, args, sigma = k
 
-        if k[2]['type'] == "sample":
+        if sigma['type'] == "sample":
             
             x_k = args
             name = sigma['address']
@@ -43,13 +43,15 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]})
             px = px + l
             num_sample_states = num_sample_states + 1
+            cont.sig['type'] = None # need to reset to None
             k = cont(*args)
 
-        elif k[2]['type'] == "observe":
+        elif sigma['type'] == "observe":
             dist_k = sigma['dist']
             y_k = args
             l = dist_k.log_prob(*y_k)
             py = py + l
+            cont.sig['type'] = None # need to reset to None
             k = cont(*args)
 
         else:
@@ -85,6 +87,7 @@ def lmh_sampler(k, num_samples, D):
 
         # Create new branch
         k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
+        k_mid_new[0].sig['type'] =  "sample"
         D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
         # Run the program starting from the new x
@@ -94,7 +97,6 @@ def lmh_sampler(k, num_samples, D):
 
         rejection_new = (px_new+py_new)+ l_mid + tc.log(num_sample_states_old)
         rejection_old = (px_old+py_old)+ l_mid_new + tc.log(num_sample_states_new + num_sample_states_mid)
-
 
         if tc.rand(1) < tc.exp(rejection_new - rejection_old):
             D = D_new
@@ -110,13 +112,13 @@ def lmh_sampler(k, num_samples, D):
 
     samples = samples[math.floor(0.2*len(samples)):]
 
-    # plt.plot(log_probs)
-    # plt.savefig('log_probs.png')
-    # plt.close()
+    plt.plot(log_probs)
+    plt.savefig('log_probs.png')
+    plt.close()
 
-    # plt.plot(samples)
-    # plt.savefig('samples.png')
-    # plt.close()
+    plt.plot(samples)
+    plt.savefig('samples.png')
+    plt.close()
 
 
     return samples
