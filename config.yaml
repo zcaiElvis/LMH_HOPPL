@@ -17,7 +17,7 @@ hoppl_deterministic_tests: []
 probabilistic_tests: []
 homework4_programs: []
 homework5_programs: []
-homework6_programs: [2, 4]
+homework6_programs: [2]
 
 # Inference method
 # inference: None

@@ -154,11 +154,13 @@ def evaluate(ast:dict, sig=None, run_name='start', verbose=False):
         ast: abstract syntax tree
     Returns: The return value of the program
     '''
-    if sig is None: sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
+    if sig is None: sig = pmap({'logW':tc.tensor(0.0), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
     env = standard_env()
-    output = lambda x: x # Identity function, so that output value is identical to output
-    exp = eval(ast, sig, env, verbose)(run_name, output) # NOTE: Must run as function with a continuation
-    while type(exp) is tuple: # If there are continuations the exp will be a tuple and a re-evaluation needs to occur
+    output = lambda x: x 
+    exp = eval(ast, sig, env, verbose)(run_name, output)
+    while type(exp) is tuple: 
         func, args, sig = exp
-        exp = func(*args, sig)
+        exp = func(*args)
     return exp, sig 
+
+

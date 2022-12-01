@@ -11,6 +11,7 @@ import math
 def get_LMH_samples(ast: dict, num_samples: int, wandb_name:str,  verbose:bool,  run_name = "start"):
     env = standard_env()
     sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
+    # sig = {'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)}
     exp = eval(ast, sig, env, verbose)(run_name, lambda x : x) ### First run
     # exp = eval(ast, sig, env, verbose)
 
@@ -39,33 +40,40 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             names.append(name)
             dist_k = sigma['dist']
 
-            if name in D.keys(): # If already in dictionary
-                disk_d, l_d, _, _, px, py, _ = D[name]
-                if dist_k.params ==  disk_d.params:
-                    pass
-                    px = px + l_d
-                else:
-                    l = dist_k.log_prob(*x_k)
-                    
-                    # px = px + l
-                    # store px, py value before update
-                    D = D.update({name: [dist_k, l, x_k, k, px, py, num_sample_states]})
-                    px = px + l
-                    
-            else: # If not in dictionary
-                l = dist_k.log_prob(*x_k)
-                # px = px + l
-                D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
-                px = px + l
+            # if name in D.keys(): # If already in dictionary
+            #     disk_d, l_d, _, _, px, py, _ = D[name] # TODO: D shouldn't be accessed this way. px, py are the final pxpy values, need to also store intermediate ones
+            #     if dist_k.params ==  disk_d.params:
+            #         px = px + l_d
+            #         num_sample_states = num_sample_states + 1
+            #         k = cont(*args)
+            #     else:
+            #         l = dist_k.log_prob(*x_k)
+            #         D = D.update({name: [dist_k, l, x_k, k, px, py, num_sample_states]})
+            #         px = px + l
+            #         num_sample_states = num_sample_states + 1
+            #         k = cont(*args)
 
+                    
+            # else: # If not in dictionary
+            #     l = dist_k.log_prob(*x_k)
+            #     D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
+            #     px = px + l
+            #     num_sample_states = num_sample_states + 1
+            #     k = cont(*args)
+            l = dist_k.log_prob(*x_k)
+            D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]}) # storing px, py
+            px = px + l
             num_sample_states = num_sample_states + 1
             k = cont(*args)
 
-        else:
+        elif k[2]['type'] == "observe":
             dist_k = sigma['dist']
             y_k = args
             l = dist_k.log_prob(*y_k)
             py = py + l
+            k = cont(*args)
+
+        else:
             k = cont(*args)
 
     return px, py, k, D, names, num_sample_states
@@ -105,9 +113,9 @@ def lmh_sampler(k, num_samples, D):
 
         #######################################
 
-
         rejection_new = (px_new+py_new)+ l_mid + tc.log(num_sample_states_old)
         rejection_old = (px_old+py_old)+ l_mid_new + tc.log(num_sample_states_new + num_sample_states_mid)
+
 
         if tc.rand(1) < tc.exp(rejection_new - rejection_old):
             D = D_new
