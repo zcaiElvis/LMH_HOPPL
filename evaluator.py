@@ -270,11 +270,11 @@ def eval(e, sig:dict, env:Env, trampolining=True, verbose=False):
             sample = dist.sample()
             if 'logP' in sig.keys():
                 log_prob = dist.log_prob(sample)
-                sig['logP'] += log_prob
-            if 'location' in sig.keys(): sig['location'] = 'sample'
-            if 'address' in sig.keys(): sig['address'] = eval(e[1], sig, env)
-            if 'dist' in sig.keys(): sig['dist'] = dist
-            if 'type' in sig.keys(): sig['type'] =  "sample"
+                logp = sig['logP']
+                sig = sig.set('logP', logp+log_prob)
+            if 'address' in sig.keys(): sig = sig.set('address', eval(e[1], sig, env))
+            if 'dist' in sig.keys(): sig = sig.set('dist', dist)
+            if 'type' in sig.keys(): sig = sig.set('type', "sample")
             result = cont, [sample], sig
 
         elif e[0] == 'observe': # Probabilistic program observe
@@ -283,12 +283,13 @@ def eval(e, sig:dict, env:Env, trampolining=True, verbose=False):
             cont = eval(e[4], sig, env)
             if ('logP' in sig.keys()) or ('logW' in sig.keys()):
                 log_prob = dist.log_prob(obs)
-                if 'logP' in sig.keys(): sig['logP'] += log_prob
-                if 'logW' in sig.keys(): sig['logW'] += log_prob
-            if 'location' in sig.keys(): sig['location'] = 'observe'
-            if 'address' in sig.keys(): sig['address'] = eval(e[1], sig, env)
-            if 'dist' in sig.keys(): sig['dist'] = dist
-            if 'type' in sig.keys(): sig['type'] =  "observe"
+                # logp = sig['logP']
+                # logw = sig['logW']
+                if 'logP' in sig.keys(): sig = sig.set('logP', log_prob + sig['logP'])
+                if 'logW' in sig.keys(): sig = sig.set('logW',  log_prob + sig['logW'])
+            if 'address' in sig.keys(): sig = sig.set('address', eval(e[1], sig, env))
+            if 'dist' in sig.keys(): sig = sig.set('dist', dist)
+            if 'type' in sig.keys(): sig = sig.set('type', "sample")
             result = cont, [obs], sig
 
         elif e[0] == 'fn': # Function definition
@@ -319,7 +320,7 @@ def evaluate(ast:dict, sig=None, run_name='start', verbose=False):
         ast: abstract syntax tree
     Returns: The return value of the program
     '''
-    if sig is None: sig = {}
+    if sig is None: sig = pmap({})
     env = standard_env()
     output = lambda x: x # Identity function, so that output value is identical to output
     exp = eval(ast, sig, env, verbose)(run_name, output) # NOTE: Must run as function with a continuation

@@ -30,5 +30,5 @@ inference: IS
 compile: True
 
 # Inference stuff
-num_samples: 1e5
+num_samples: 1e3
 tmax: 60 # Seconds
