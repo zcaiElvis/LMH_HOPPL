@@ -7,43 +7,64 @@ import sys
 # Project imports
 from primitives import primitives
 
-class Env():
-    "An environment: a dict of {'var': val} pairs, with an outer Env."
-    def __init__(self, parms=(), args=(), outer=None):
-        self.data = pmap(zip(parms, args))
-        self.outer = outer
-        if outer is None:
-            self.level = 0
-        else:
-            self.level = outer.level+1
+# class Env():
+#     "An environment: a dict of {'var': val} pairs, with an outer Env."
+#     def __init__(self, parms=(), args=(), outer=None):
+#         self.data = pmap(zip(parms, args))
+#         self.outer = outer
+#         if outer is None:
+#             self.level = 0
+#         else:
+#             self.level = outer.level+1
 
-    def __getitem__(self, item):
-        return self.data[item]
+#     def __getitem__(self, item):
+#         return self.data[item]
 
-    def find(self, var):
-        "Find the innermost Env where var appears."
-        if (var in self.data):
-            return self
-        else:
-            if self.outer is not None:
-                return self.outer.find(var)
+#     def find(self, var):
+#         "Find the innermost Env where var appears."
+#         if (var in self.data):
+#             return self
+#         else:
+#             if self.outer is not None:
+#                 return self.outer.find(var)
+#             else:
+#                 raise RuntimeError('var "{}" not found in outermost scope'.format(var))
+
+#     def print_env(self, print_lowest=False):
+#         print_limit = 1 if print_lowest == False else 0
+#         outer = self
+#         while outer is not None:
+#             if outer.level >= print_limit:
+#                 print('Scope on level ', outer.level)
+#                 if 'f' in outer:
+#                     print('Found f, ')
+#                     print(outer['f'].body)
+#                     print(outer['f'].parms)
+#                     print(outer['f'].env)
+#                 print(outer,'\n')
+#             outer = outer.outer
+class Env(object):
+        'An environment: a persistent map of {var: val} pairs, with an outer environment'
+        def __init__(self, params=(), args=(), outer=None):
+            self.env = pmap()
+            self.update(dict(zip(params, args)))
+            self.outer = outer
+        def __str__(self):
+            return self.env.__str__()
+        def update(self, dictionary:dict):
+            for key, value in dictionary.items():
+                self.env = self.env.set(key, value)
+        def find(self, var:str):
+            'Find the innermost Env where var appears'
+            if var in self.env.keys():
+                result = self.env
             else:
-                raise RuntimeError('var "{}" not found in outermost scope'.format(var))
-
-    def print_env(self, print_lowest=False):
-        print_limit = 1 if print_lowest == False else 0
-        outer = self
-        while outer is not None:
-            if outer.level >= print_limit:
-                print('Scope on level ', outer.level)
-                if 'f' in outer:
-                    print('Found f, ')
-                    print(outer['f'].body)
-                    print(outer['f'].parms)
-                    print(outer['f'].env)
-                print(outer,'\n')
-            outer = outer.outer
-
+                if self.outer is None:
+                    print('Not found in any environment:', var)
+                    raise ValueError('Outer limit of environment reached')
+                else:
+                    result = self.outer.find(var)
+            return result
 
 
 class Procedure(object):
@@ -51,13 +72,17 @@ class Procedure(object):
     def __init__(self, params:list, body:list, sig:dict, env:Env):
         self.params, self.body, self.sig, self.env = params, body, sig, env
     def __call__(self, *args):
-        return eval(self.body, self.sig, Env(self.params, args, self.env))
+        newenv = Env(self.params, args, self.env)
+        result = eval(self.body, self.sig, newenv)
+        return result
 
 ### I set k.sig because self.sig is used here. I want self.sig = sig
 
 def standard_env():
     "An environment with some Scheme standard procedures."
     env = Env(primitives.keys(), primitives.values())
+    # env= Env()
+    # env.update(primitives)
     return env
 
 def eval(e, sig:dict, env:Env, verbose=False):
@@ -73,17 +98,25 @@ def eval(e, sig:dict, env:Env, verbose=False):
     elif tc.is_tensor(e):
         return e
 
-    elif isinstance(e, str):
-        try:
-            ### If already defined, return corresponding value
+    elif type(e) is str: # Strings
+        if (e[0] == '"' and e[-1] == '"'): # 'case c' with string
+            return str(e[1:-1])
+        elif e[0:4] == 'addr': # Addressing
+            return e
+        else: # 'case v' look-up variable in environment
             return env.find(e)[e]
 
-        except:
-            # sig['address'] = sig['address'] + "-" + e
-            addr = sig['address'] + "-" + e
-            sig.set('address', addr)
-            ### If not, evaluate it below
-            return e
+    # elif isinstance(e, str):
+    #     try:
+    #         ### If already defined, return corresponding value
+    #         return env.find(e)[e]
+
+    #     except:
+    #         # sig['address'] = sig['address'] + "-" + e
+    #         addr = sig['address'] + "-" + e
+    #         sig.set('address', addr)
+    #         ### If not, evaluate it below
+    #         return e
 
     op, *args = e
 
@@ -102,11 +135,13 @@ def eval(e, sig:dict, env:Env, verbose=False):
         k = eval(args[2], sig, env)
         addr = eval(args[0], sig, env)
         num_sample_statement = sig['num_sample_state']
+        logw = sig['logW']
 
         sig = sig.update({'address': addr})
         sig = sig.update({'dist':d})
         sig = sig.update({'type':"sample"})
         sig = sig.update({'num_sample_state': num_sample_statement+tc.tensor(1.)})
+        sig = sig.update({'logW': logw})
 
         k.sig = sig
 
@@ -144,7 +179,9 @@ def eval(e, sig:dict, env:Env, verbose=False):
         if isinstance(proc, str):
             raise Exception("{} is not a procedure".format(proc))
 
-        return proc(*args)
+        result = proc(*args)
+
+        return result
 
 
 def evaluate(ast:dict, sig=None, run_name='start', verbose=False):
@@ -161,6 +198,11 @@ def evaluate(ast:dict, sig=None, run_name='start', verbose=False):
     while type(exp) is tuple: 
         func, args, sig = exp
         exp = func(*args)
+        print(exp[0].sig)
     return exp, sig 
 
 
+
+
+
+# change alex code to persistance
