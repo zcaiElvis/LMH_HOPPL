@@ -52,8 +52,8 @@ def get_importance_samples(ast:dict, num_samples:int, tmax=None, wandb_name=None
     log_weights = []
     if (tmax is not None): max_time = time()+tmax
     for i in range(num_samples):
-        sigma = pmap({'logW':tc.tensor(0.), 'address':'start', 'num_sample_state': 0})
-        # sigma = {'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0}
+        # sigma = pmap({'logW':tc.tensor(0.), 'address':'start', 'num_sample_state': 0})
+        sigma = {'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0}
         sample, sigma = evaluate(ast, sig = sigma, verbose=verbose)
         if wandb_name is not None: log_sample_to_wandb(sample, i, wandb_name=wandb_name)
         samples.append(sample)

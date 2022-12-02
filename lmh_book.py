@@ -6,7 +6,7 @@ import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import math
-
+from copy import deepcopy
 
 def get_LMH_samples(ast: dict, num_samples: int, wandb_name:str,  verbose:bool,  run_name = "start"):
     env = standard_env()
@@ -39,7 +39,9 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             name = sigma['address']
             names.append(name)
             dist_k = sigma['dist']
-            l = dist_k.log_prob(*x_k)
+
+            l = dist_k.log_prob(*x_k) # adding l here, need to subtract later
+
             D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]})
             px = px + l
             num_sample_states = num_sample_states + 1
@@ -86,7 +88,7 @@ def lmh_sampler(k, num_samples, D):
         l_mid_new = dist_mid.log_prob(x_mid_new)
 
         # Create new branch
-        k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
+        k_mid_new = deepcopy((k_mid[0], [x_mid_new], k_mid[2]))
         k_mid_new[0].sig['type'] =  "sample"
         D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
@@ -112,13 +114,13 @@ def lmh_sampler(k, num_samples, D):
 
     samples = samples[math.floor(0.2*len(samples)):]
 
-    plt.plot(log_probs)
-    plt.savefig('log_probs.png')
-    plt.close()
+    # plt.plot(log_probs)
+    # plt.savefig('log_probs.png')
+    # plt.close()
 
-    plt.plot(samples)
-    plt.savefig('samples.png')
-    plt.close()
+    # plt.plot(samples)
+    # plt.savefig('samples.png')
+    # plt.close()
 
 
     return samples
