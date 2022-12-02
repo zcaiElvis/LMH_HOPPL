@@ -47,6 +47,8 @@ class Env(object):
         'An environment: a persistent map of {var: val} pairs, with an outer environment'
         def __init__(self, params=(), args=(), outer=None):
             self.env = pmap()
+            # if params == ['alpha', 'dontcare0', 'k50']:
+            #     print("creating k50 dictionary, check args")
             self.update(dict(zip(params, args)))
             self.outer = outer
         def __str__(self):
@@ -60,7 +62,6 @@ class Env(object):
                 result = self.env
             else:
                 if self.outer is None:
-                    print('Not found in any environment:', var)
                     raise ValueError('Outer limit of environment reached')
                 else:
                     result = self.outer.find(var)
@@ -87,6 +88,9 @@ def standard_env():
 
 def eval(e, sig:dict, env:Env, verbose=False):
 
+    # if e == ['conj', 'cps51', 'states', 'state', 'k50']:
+    #     print("now at conjugate step")
+
 
     if isinstance(e, bool):
         t = tc.tensor(e).float()
@@ -104,19 +108,8 @@ def eval(e, sig:dict, env:Env, verbose=False):
         elif e[0:4] == 'addr': # Addressing
             return e
         else: # 'case v' look-up variable in environment
-            return env.find(e)[e]
-
-    # elif isinstance(e, str):
-    #     try:
-    #         ### If already defined, return corresponding value
-    #         return env.find(e)[e]
-
-    #     except:
-    #         # sig['address'] = sig['address'] + "-" + e
-    #         addr = sig['address'] + "-" + e
-    #         sig.set('address', addr)
-    #         ### If not, evaluate it below
-    #         return e
+            lookup = env.find(e)[e]
+            return lookup
 
     op, *args = e
 
@@ -166,7 +159,10 @@ def eval(e, sig:dict, env:Env, verbose=False):
 
 
     elif op == "fn":
-        (parms, body) = args
+        parms, body = args
+        # print(parms)
+        # if parms == ['alpha', 'dontcare0', 'k50']:
+        #     print("creating k50 dictionary, check args")
         return Procedure(parms, body, sig, env)
 
     
@@ -174,7 +170,10 @@ def eval(e, sig:dict, env:Env, verbose=False):
         proc = eval(op, sig, env)
         args = []
         for arg in e[1:]:
-            args.append(eval(arg, sig, env))
+            if arg == "k50":
+                print("heres k50")
+            arg_result = eval(arg, sig, env)
+            args.append(arg_result)
 
         if isinstance(proc, str):
             raise Exception("{} is not a procedure".format(proc))
@@ -198,7 +197,6 @@ def evaluate(ast:dict, sig=None, run_name='start', verbose=False):
     while type(exp) is tuple: 
         func, args, sig = exp
         exp = func(*args)
-        print(exp[0].sig)
     return exp, sig 
 
 

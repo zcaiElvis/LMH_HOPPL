@@ -27,7 +27,7 @@ inference: IS
 # inference: PSMC
 
 # Compilation
-compile: True
+compile: False
 
 # Inference stuff
 num_samples: 1e4

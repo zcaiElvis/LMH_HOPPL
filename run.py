@@ -8,7 +8,7 @@ import sys
 
 # Project imports
 from daphne import load_program
-from evaluator import evaluate
+from evaluator import evaluate, eval
 from sampling import get_samples
 from tests import is_tol, run_probabilistic_test, load_truth
 from utils import wandb_plots_homework5, wandb_plots_homework6
