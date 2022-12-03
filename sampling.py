@@ -8,7 +8,7 @@ from evaluator import eval, evaluate, standard_env
 from utils import log_sample_to_wandb, log_samples_to_wandb
 from utils import resample_using_importance_weights, check_addresses
 from lmh_book import get_LMH_samples
-from psmc import get_PSMC_samples
+# from psmc import get_PSMC_samples
 
 def get_samples(ast:dict, num_samples:int, tmax=None, inference=None, wandb_name=None, verbose=False):
     '''

@@ -117,20 +117,19 @@ class Dirichlet(tc.distributions.Dirichlet):
 
 class Bernoulli(tc.distributions.Bernoulli):
     
-    def __init__(self, probs=None, logits=None):
-        if logits is None and probs is None:
-            raise ValueError('Set either probs or logits')
-        elif logits is None:
-            if type(probs) is float:
-                probs = tc.tensor(probs)
-            logits = tc.log(probs/(1.-probs)) # NOTE: This will fail if probs = 0
-        super().__init__(logits=logits)
-
+    def __init__(self, probs=None):
+        # if logits is None and probs is None:
+        #     raise ValueError('Set either probs or logits')
+        # elif logits is None:
+        #     if type(probs) is float:
+        #         probs = tc.tensor(probs)
+        #     logits = tc.log(probs/(1.-probs)) # NOTE: This will fail if probs = 0
+        super().__init__(probs)
+        self.probs = probs
+        self._param = self.probs
+        
     def params(self):
-        return [self.logits]
-
-    def optim_params(self):
-        return [self.logits.requires_grad_()]
+        return [self.probs]
 
 
 class Categorical(tc.distributions.Categorical):

@@ -2,6 +2,7 @@ from evaluator import eval, Env, standard_env, Procedure
 
 import torch as tc
 from pyrsistent import pmap, pset
+from copy import deepcopy
 import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -10,7 +11,7 @@ import math
 
 def get_LMH_samples(ast: dict, num_samples: int, wandb_name:str,  verbose:bool,  run_name = "start"):
     env = standard_env()
-    sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
+    sig = pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0), 'params': None})
     # sig = {'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)}
     exp = eval(ast, sig, env, verbose)(run_name, lambda x : x) ### First run
     # exp = eval(ast, sig, env, verbose)
@@ -43,7 +44,6 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             D = D.update({name: [dist_k,l, x_k, k, px, py, num_sample_states]})
             px = px + l
             num_sample_states = num_sample_states + 1
-            cont.sig = cont.sig.set('type', None)
             k = cont(*args)
 
         elif k[2]['type'] == "observe":
@@ -51,7 +51,6 @@ def trace_update(k, D = pmap({}), px=None, py = None):
             y_k = args
             l = dist_k.log_prob(*y_k)
             py = py + l
-            cont.sig = cont.sig.set('type', None)
             k = cont(*args)
 
         else:
@@ -63,11 +62,14 @@ def trace_update(k, D = pmap({}), px=None, py = None):
 
 
 def lmh_sampler(k, num_samples, D):
+
     px_old, py_old, x_old, D, names, num_sample_states_old = trace_update(k, D)
 
     samples = []
 
     log_probs = []
+
+    num_accept = 0
 
     for i in range(num_samples):
         
@@ -86,8 +88,8 @@ def lmh_sampler(k, num_samples, D):
         l_mid_new = dist_mid.log_prob(x_mid_new)
 
         # Create new branch
-        k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
-        k_mid_new[0].sig = k_mid_new[0].sig.set('type', None)
+        k_cont = k_mid[0]
+        k_mid_new = (k_cont, [x_mid_new], k_mid[2])
         D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
         # Run the program starting from the new x
@@ -95,11 +97,12 @@ def lmh_sampler(k, num_samples, D):
 
         #######################################
 
-        rejection_new = (px_new+py_new)+ l_mid + tc.log(num_sample_states_old)
-        rejection_old = (px_old+py_old)+ l_mid_new + tc.log(num_sample_states_new + num_sample_states_mid)
+        rejection_new = (px_new+py_new) + tc.log(num_sample_states_old)
+        rejection_old = (px_old+py_old) + tc.log(num_sample_states_new + num_sample_states_mid)
 
+        rejection = tc.exp(rejection_new - rejection_old)
 
-        if tc.rand(1) < tc.exp(rejection_new - rejection_old):
+        if tc.rand(1) < rejection:
             D = D_new
             px_old = px_new
             py_old = py_new
@@ -107,11 +110,12 @@ def lmh_sampler(k, num_samples, D):
             x_old = x_new
             num_sample_states_old = num_sample_states_mid + num_sample_states_new
             log_probs.append(px_new+py_new)
+            num_accept +=1
         else:
             samples.append(x_old)
             log_probs.append(px_old+py_old)
 
-    samples = samples[math.floor(0.2*len(samples)):]
+    # samples = samples[math.floor(0.2*len(samples)):]
 
     # plt.plot(log_probs)
     # plt.savefig('log_probs.png')
@@ -120,6 +124,8 @@ def lmh_sampler(k, num_samples, D):
     # plt.plot(samples)
     # plt.savefig('samples.png')
     # plt.close()
+
+    print("number of acceptance: ", num_accept)
 
 
     return samples

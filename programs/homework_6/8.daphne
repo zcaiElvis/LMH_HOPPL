@@ -1,0 +1,6 @@
+(let [mu (sample (normal 1 (sqrt 5)))
+        sigma (sample((uniform-continuous 0.1 3))
+           lik (normal mu sigma)]
+       (observe lik 8)
+       (observe lik 9)
+       mu)
