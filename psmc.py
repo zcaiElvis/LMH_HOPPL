@@ -11,47 +11,7 @@ from lmh_book import trace_update
 from copy import deepcopy
 
 
-
-def run_until_observe_or_end(k, D):
-
-    if px == None or py == None: px = tc.tensor(0.0); py = tc.tensor(0.0)
-    
-    names = []
-    num_sample_states = tc.tensor(0.0) # number of samples for this run, total num samples recorded in lmh_sampler instead
-
-
-    while isinstance(k, tuple):
-
-        cont, args, sigma = k
-
-        if sigma['type'] == "sample":
-            
-            x = args
-            name = sigma['address']
-            names.append(name)
-            dist = sigma['dist']
-            num_sample_states = sigma['num_sample_state']
-
-            l = dist.log_prob(*x)
-            D = D.update({name: [dist, l, x, k, px, py, num_sample_states]})
-
-            px = px + l
-            k = cont(*args)
-
-        elif sigma['type'] == "observe":
-            return k, D
-
-
-        else:
-            k = cont(*args)
-
-    return px, py, k, D, names, num_sample_states
-
-def precond(D):
-
-    return
-
-def get_SMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=None, verbose=False):
+def get_PSMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=None, verbose=False):
     '''
     Generate a set of samples via Sequential Monte Carlo from a HOPPL program
     '''
@@ -62,7 +22,8 @@ def get_SMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=None
     Ds = []
 
     for i in range(n_particles):
-        particle = eval(ast, pmap({'logW':tc.tensor(0.0), 'address':'', 'type': None, 'num_sample_state':tc.tensor(0.0)}),standard_env(), verbose)("start", lambda x:x)
+        sigma =  pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0), 'params': None})
+        particle = eval(ast, sigma, standard_env(), verbose)("start", lambda x:x)
         logW = tc.tensor(0.)
 
         particles.append(particle)
@@ -70,35 +31,120 @@ def get_SMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=None
         Ds.append(pmap({}))
     
     done = False
-    smc_cnter = 0
-    while not done:
-        for i in range(n_particles): 
-            res = run_until_observe_or_end(particles[i], Ds[i])
-            if type(res) != tuple:
-                particles[i] = res[0]
-                if i == 0:
-                    done = True 
-                    address = ''
-                else:
-                    if not done:
-                        raise RuntimeError('Failed SMC, finished one calculation before the other')
-            else:
-                particles[i], Ds[i] = res
 
-        particles = precond(Ds)        
+    while type(particles[0]) == tuple:
+        for i in range(num_samples):
+            particles[i] = precond(particles[i], Ds[i]) ### run until observe, construct new trace from rd sample, compare
 
+        # check_addresses(particles)
+        weights = [particle[0].sig['logW'] for particle in particles]
+        particles = resample_using_importance_weights(particles, weights)
+        for particle in particles:
+            particle[0].sig = particle[0].sig.set('logW', tc.tensor(0.0))
 
-        if not done:
-            check_addresses(particles)
-            weights = [particle[0].sig['logW'] for particle in particles]
-            particles = resample_using_importance_weights(particles, weights)
-            for particle in particles:
-                particle[0].sig = particle[0].sig.set('logW', tc.tensor(0.0))
-
-
-            logZs.append(weights)
-        smc_cnter += 1
-    logZ = tc.tensor(logZs).sum(dim=0)
-        
     return particles
+
+            
+def precond(particle, D, num_precond = 3):
+    
+    ### Run it once ###
+    px_old, py_old, k_old, D, names, num_sample_states_old = psmc_trace_update(particle, D)
+
+
+    for _ in range(num_precond):
+
+
+        ### Randomly select a sample statement
+        rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
+        target = names[rd_idx]
+
+        ### Look up
+        dist_mid, l_mid, [x_mid], k_mid, px_mid, py_mid, num_sample_states_mid = D[target]
+
+        ### Resample sample states
+        x_mid_new = dist_mid.sample()
+        l_mid_new = dist_mid.log_prob(x_mid_new)
+
+        ### Create new trace
+        k_mid_new = deepcopy((k_mid[0], [x_mid_new], k_mid[2]))
+        D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
+
+
+        ### Rerun ###
+        px_new, py_new, k_new, D_new, _, num_sample_states_new = psmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
+
+
+        ### Rejection step
+
+        rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
+        rejection_btm = (px_old+py_old) + tc.log(num_sample_states_old)
+        rejection = tc.exp(rejection_top - rejection_btm)
+
+        if tc.rand(1) < rejection:
+            k_old = k_new
+            px_old = px_new
+            py_old = py_new
+            D = D_new
+            num_sample_states_old = num_sample_states_new
+        else:
+            pass
+
+    return k_old
+
+
+
+def psmc_trace_update(k, D, px = None, py = None):
+    
+    ### Initialize px and py if first run
+    if px == None or py == None: px = tc.tensor(0.0); py = tc.tensor(0.0)
+
+    ### Sample names and number of sample states
+    names = []
+    num_sample_states = tc.tensor(0.0)
+
+    ### Run particle:
+
+    while isinstance(k, tuple):
+
+        cont, args, sigma = k
+
+        if sigma['type'] == "sample":
+
+            ### Extract info from run
+            x = args
+            name = sigma['address']
+            dist = sigma['dist']
+            num_sample_states = sigma['num_sample_state']
+            
+
+            ### Store to D. Note px is before seeing this sample
+            l = dist.log_prob(*x)
+            D = D.update({name: [dist, l, x, k, px, py, num_sample_states]})
+
+            ### Compute px, append to name
+            px = px + l
+            names.append(name)
+
+            ### Run program forward
+            k = cont(*args)
+
+
+        elif sigma['type'] == "observe":
+            
+            ### Extract info from run
+            y = args
+            dist = sigma['dist']
+
+            ### Calculate py
+            l = dist.log_prob(*y)
+            py = py + l
+
+            return px, py, k, D, names, num_sample_states
+
+    return k
+
+
+
+
+
 
