@@ -95,7 +95,8 @@ def eval(e, sig:dict, env:Env, verbose=False):
         num_sample_statement = sig['num_sample_state']
         logw = sig['logW']
 
-        sig = sig.set('address', addr + "sample")
+        sig = sig.set('params', str(d.params))
+        sig = sig.set('address', addr + "-sample")
         sig = sig.set('params', str(d.params))
         sig = sig.set('dist', d)
         sig = sig.set('type', "sample")
@@ -114,7 +115,7 @@ def eval(e, sig:dict, env:Env, verbose=False):
         addr = eval(args[0], sig, env)
         logW = sig['logW']
 
-        sig = sig.set('address', addr + "observe")
+        sig = sig.set('address', addr + "-observe")
         sig = sig.set('logW', logW+logp)
         sig = sig.set('type', 'observe')
         sig = sig.set('dist', d)

@@ -11,18 +11,6 @@ from lmh_book import trace_update
 from copy import deepcopy
 
 
-def run_until_observe_or_end(res):
-    cont, args, sigma = res
-    res = cont(*args)
-    while type(res) is tuple:
-        if res[2]['type'] == 'observe':
-            return res
-        cont, args, sigma = res
-        res = cont(*args)
-
-    res = (res, None, {'done' : True}) #wrap it back up in a tuple, that has "done" in the sigma map
-    return res
-
 
 def run_until_observe_or_end(k, D):
 
@@ -36,29 +24,23 @@ def run_until_observe_or_end(k, D):
 
         cont, args, sigma = k
 
-        if k[2]['type'] == "sample":
+        if sigma['type'] == "sample":
             
-            x_k = args
+            x = args
             name = sigma['address']
             names.append(name)
-            dist_k = sigma['dist']
-            l = dist_k.log_prob(*x_k)
-            D = D.update({name: [dist_k,l, x_k, deepcopy(k), px, py, num_sample_states]})
+            dist = sigma['dist']
+            num_sample_states = sigma['num_sample_state']
+
+            l = dist.log_prob(*x)
+            D = D.update({name: [dist, l, x, k, px, py, num_sample_states]})
+
             px = px + l
-            num_sample_states = num_sample_states + 1
             k = cont(*args)
 
-        elif k[2]['type'] == "observe":
+        elif sigma['type'] == "observe":
             return k, D
 
-            # return px, py, k, D, names, num_sample_states
-
-
-            # dist_k = sigma['dist']
-            # y_k = args
-            # l = dist_k.log_prob(*y_k)
-            # py = py + l
-            # k = cont(*args)
 
         else:
             k = cont(*args)
