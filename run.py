@@ -61,7 +61,7 @@ def run_tests(tests, test_type, base_dir, daphne_dir, num_samples=int(1e4), max_
     print('All '+test_type+' tests passed\n')
 
 
-def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3), tmax=None, inference=None, compile=True, wandb_run=False, verbose=False):
+def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3), num_preconds = int(1e1), tmax=None, inference=None, compile=True, wandb_run=False, verbose=False):
 
     # File paths
     prog_dir = base_dir+'/programs/'+prog_set+'/'
@@ -82,12 +82,14 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
         print('Inference method:', inference)
         print('Maximum samples [log10]:', np.log10(num_samples))
         print('Maximum time [s]:', tmax)
+        print("###########")
         ast = load_program(daphne_dir, daphne_prog(i), json_prog(i), mode='desugar-hoppl-cps', compile=compile)
-        samples = get_samples(ast, num_samples, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
+        samples = get_samples(ast, num_samples, num_preconds, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
         samples = tc.stack(samples).type(tc.float)
         np.savetxt(results_file(i), samples)
 
         # Calculate some properties of the samples
+        print("###########")
         print('Samples shape:', samples.shape)
         print('First sample:', samples[0])
         print('Sample mean:', samples.mean(axis=0))
@@ -111,6 +113,7 @@ def run_all(cfg):
     # Configuration
     wandb_run = cfg['wandb_run']
     num_samples = int(cfg['num_samples'])
+    num_preconds = int(cfg['num_preconds'])
     tmax = cfg['tmax']
     compile = cfg['compile']
     base_dir = cfg['base_dir']
@@ -154,7 +157,7 @@ def run_all(cfg):
     # Homework 6
     programs = cfg['homework6_programs']
     run_programs(programs, prog_set='homework_6', base_dir=base_dir, daphne_dir=daphne_dir,
-        num_samples=num_samples, tmax=tmax, inference=inference, compile=compile, wandb_run=wandb_run, verbose=False)
+        num_samples=num_samples, num_preconds = num_preconds, tmax=tmax, inference=inference, compile=compile, wandb_run=wandb_run, verbose=False)
 
     # W&B finalize
     if wandb_run: wandb.finish()

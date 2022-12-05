@@ -95,9 +95,8 @@ def eval(e, sig:dict, env:Env, verbose=False):
         num_sample_statement = sig['num_sample_state']
         logw = sig['logW']
 
-        sig = sig.set('params', str(d.params))
+
         sig = sig.set('address', addr + "-sample")
-        sig = sig.set('params', str(d.params))
         sig = sig.set('dist', d)
         sig = sig.set('type', "sample")
         sig = sig.set('num_sample_state',  num_sample_statement+tc.tensor(1.))

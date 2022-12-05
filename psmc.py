@@ -11,7 +11,7 @@ from lmh_book import trace_update
 from copy import deepcopy
 
 
-def get_PSMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=None, verbose=False):
+def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='start', wandb_name=None, verbose=False):
     '''
     Generate a set of samples via Sequential Monte Carlo from a HOPPL program
     '''
@@ -22,7 +22,7 @@ def get_PSMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=Non
     Ds = []
 
     for i in range(n_particles):
-        sigma =  pmap({'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0), 'params': None})
+        sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
         particle = eval(ast, sigma, standard_env(), verbose)("start", lambda x:x)
         logW = tc.tensor(0.)
 
@@ -34,24 +34,30 @@ def get_PSMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=Non
 
     while type(particles[0]) == tuple:
         for i in range(num_samples):
-            particles[i] = precond(particles[i], Ds[i]) ### run until observe, construct new trace from rd sample, compare
+            particles[i], weights[i] = precond(particles[i], Ds[i], num_preconds) ### run until observe, construct new trace from rd sample, compare
 
+        # if type(particles[0]) != tuple: break
         # check_addresses(particles)
-        weights = [particle[0].sig['logW'] for particle in particles]
         particles = resample_using_importance_weights(particles, weights)
-        for particle in particles:
-            particle[0].sig = particle[0].sig.set('logW', tc.tensor(0.0))
+        for i in range(num_samples):
+            particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0)) ### TODO: check which weight to reset
+            cont, args, sig = particles[i]
+            particles[i] = cont(*args)
 
     return particles
 
             
-def precond(particle, D, num_precond = 3):
+def precond(particle, D, num_preconds):
     
     ### Run it once ###
     px_old, py_old, k_old, D, names, num_sample_states_old = psmc_trace_update(particle, D)
 
+    ### If no sample statement ###
+    if len(names) == 0:
+        return k_old, px_old + py_old
 
-    for _ in range(num_precond):
+
+    for _ in range(num_preconds):
 
 
         ### Randomly select a sample statement
@@ -67,6 +73,7 @@ def precond(particle, D, num_precond = 3):
 
         ### Create new trace
         k_mid_new = deepcopy((k_mid[0], [x_mid_new], k_mid[2]))
+        # k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
         D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
 
@@ -76,8 +83,12 @@ def precond(particle, D, num_precond = 3):
 
         ### Rejection step
 
+        # rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
+        # rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
+
         rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
-        rejection_btm = (px_old+py_old) + tc.log(num_sample_states_old)
+        rejection_btm = (px_old+py_old)  + tc.log(num_sample_states_old)
+
         rejection = tc.exp(rejection_top - rejection_btm)
 
         if tc.rand(1) < rejection:
@@ -89,7 +100,7 @@ def precond(particle, D, num_precond = 3):
         else:
             pass
 
-    return k_old
+    return k_old, px_old + py_old 
 
 
 
@@ -138,6 +149,9 @@ def psmc_trace_update(k, D, px = None, py = None):
             ### Calculate py
             l = dist.log_prob(*y)
             py = py + l
+
+            ### Run pass this observe
+            # k = cont(*args)
 
             return px, py, k, D, names, num_sample_states
 

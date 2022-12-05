@@ -30,5 +30,6 @@ inference: PSMC
 compile: False
 
 # Inference stuff
-num_samples: 1e3
+num_samples: 1e4
+num_preconds: 10
 tmax: 60 # Seconds

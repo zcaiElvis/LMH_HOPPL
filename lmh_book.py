@@ -100,10 +100,6 @@ def lmh_sampler(k, num_samples, D):
         x_mid_new = dist_mid.sample()
         l_mid_new = dist_mid.log_prob(x_mid_new)
 
-        if x_mid_new > 8:
-            if x_mid_new - x_mid  < 0.5:
-                print("ha")
-
         # Create new trace
         k_cont = k_mid[0]
         k_mid_new = deepcopy((k_cont, [x_mid_new], k_mid[2]))
@@ -120,8 +116,8 @@ def lmh_sampler(k, num_samples, D):
 
         #######################################
 
-        rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
-        rejection_btm = (px_old+py_old) + tc.log(num_sample_states_old)
+        rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
+        rejection_btm = (px_old+py_old) + l_mid_new  + tc.log(num_sample_states_old)
 
         rejection = tc.exp(rejection_top - rejection_btm)
 
@@ -137,16 +133,24 @@ def lmh_sampler(k, num_samples, D):
         else:
             samples.append(x_old)
             log_probs.append(px_old+py_old)
+            # D = D_new
+            # px_old = px_new
+            # py_old = py_new
+            # samples.append(x_new)
+            # x_old = x_new
+            # num_sample_states_old = num_sample_states_new
+            # log_probs.append(px_new+py_new)
+            # num_accept +=1
 
-    samples = samples[math.floor(0.2*len(samples)):]
+    # samples = samples[math.floor(0.2*len(samples)):]
 
-    plt.plot(log_probs)
-    plt.savefig('log_probs.png')
-    plt.close()
+    # plt.plot(log_probs)
+    # plt.savefig('log_probs.png')
+    # plt.close()
 
-    plt.plot(samples)
-    plt.savefig('samples.png')
-    plt.close()
+    # plt.plot(samples)
+    # plt.savefig('samples.png')
+    # plt.close()
 
     # print("#####")
     # print(trace)
