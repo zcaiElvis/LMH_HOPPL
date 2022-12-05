@@ -17,19 +17,19 @@ hoppl_deterministic_tests: []
 probabilistic_tests: []
 homework4_programs: []
 homework5_programs: []
-homework6_programs: [2]
+homework6_programs: [7]
 
 # Inference method
 # inference: None
 # inference: IS
 # inference: SMC
-# inference: LMH
-inference: PSMC
+inference: LMH
+# inference: PSMC
 
 # Compilation
 compile: False
 
 # Inference stuff
 num_samples: 1e4
-num_preconds: 10
+num_preconds: 2
 tmax: 60 # Seconds
