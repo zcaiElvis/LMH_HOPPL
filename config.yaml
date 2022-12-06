@@ -23,13 +23,15 @@ homework6_programs: [7]
 # inference: None
 # inference: IS
 # inference: SMC
-inference: LMH
+# inference: LMH
 # inference: PSMC
+inference: rejSMC
 
 # Compilation
 compile: False
 
 # Inference stuff
 num_samples: 1e4
-num_preconds: 2
+num_rej_run: [1]
+num_samples_run: [1e3, 1e4]
 tmax: 60 # Seconds

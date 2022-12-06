@@ -9,6 +9,7 @@ from utils import log_sample_to_wandb, log_samples_to_wandb
 from utils import resample_using_importance_weights, check_addresses
 from lmh_book import get_LMH_samples
 from psmc import get_PSMC_samples
+from rej_smc import get_rejSMC_samples
 
 def get_samples(ast:dict, num_samples:int, num_preconds:int, tmax=None, inference=None, wandb_name=None, verbose=False):
     '''
@@ -24,6 +25,8 @@ def get_samples(ast:dict, num_samples:int, num_preconds:int, tmax=None, inferenc
         samples = get_LMH_samples(ast, num_samples, wandb_name, verbose)
     elif inference =="PSMC":
         samples = get_PSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
+    elif inference == "rejSMC":
+        samples = get_rejSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
     else:
         print('Inference scheme:', inference, type(inference))
         raise ValueError('Inference scheme not recognised')

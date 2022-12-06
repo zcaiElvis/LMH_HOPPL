@@ -6,12 +6,12 @@ import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import math
-from utils import resample_using_importance_weights, check_addresses
+from utils import resample_using_importance_weights, check_addresses, resample_rejsmc, calculate_effective_sample_size
 from lmh_book import trace_update
 from copy import deepcopy
 
 
-def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='start', wandb_name=None, verbose=False):
+def get_rejSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='start', wandb_name=None, verbose=False):
     '''
     Generate a set of samples via Sequential Monte Carlo from a HOPPL program
     '''
@@ -20,6 +20,7 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
     logZs = []
     n_particles = num_samples
     Ds = []
+    checkpoints = [None]*num_samples
 
     for i in range(n_particles):
         sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
@@ -34,11 +35,28 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
 
     while type(particles[0]) == tuple:
         for i in range(num_samples):
-            particles[i], weights[i] = precond(particles[i], Ds[i], num_preconds) ### run until observe, construct new trace from rd sample, compare
+            ### Run program and stop at the observe. Store output in checkpoints
+            checkpoints[i] = psmc_trace_update(particles[i], Ds[i])
+        
+        ### If not tuple, then program finished
+        if type(checkpoints[i]) != tuple: particles = [checkpoint for checkpoint in checkpoints]; break
 
-        # if type(particles[0]) != tuple: break
-        # check_addresses(particles)
-        particles = resample_using_importance_weights(particles, weights)
+        ### Resample particles, Ds and checkpoints, based on weights
+        particles = [checkpoint[2] for checkpoint in checkpoints]
+        weights = [checkpoints[1] for checkpoints in checkpoints]
+        particles, Ds, checkpoints = resample_rejsmc(particles, Ds, checkpoints, weights)
+
+
+        ### Rejunenation step
+        for i in range(num_samples):
+            particles[i], weights[i] = precond(checkpoints[i], num_preconds)
+
+        weights = tc.exp(tc.tensor(weights)).type(tc.float64)
+        weights = weights/weights.sum()
+        _ = calculate_effective_sample_size(weights, verbose=True)
+
+
+        ### Zero out weights
         for i in range(num_samples):
             particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0)) ### TODO: check which weight to reset
             cont, args, sig = particles[i]
@@ -46,11 +64,12 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
 
     return particles
 
+
             
-def precond(particle, D, num_preconds):
+def precond(checkpoint, num_preconds):
     
     ### Run it once ###
-    px_old, py_old, k_old, D, names, num_sample_states_old = psmc_trace_update(particle, D)
+    px_old, py_old, k_old, D, names, num_sample_states_old = checkpoint
 
     ### If no sample statement ###
     if len(names) == 0:
@@ -58,7 +77,6 @@ def precond(particle, D, num_preconds):
 
 
     for _ in range(num_preconds):
-
 
         ### Randomly select a sample statement
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
