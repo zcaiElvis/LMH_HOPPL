@@ -86,11 +86,12 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
                 print('Inference method:', inference)
                 print('Sample size [log10]:', np.log10(num_samples))
                 print('Rejunenation times:', num_rej)
+                print('Running log: \n')
                 ast = load_program(daphne_dir, daphne_prog(i), json_prog(i), mode='desugar-hoppl-cps', compile=compile)
                 samples = get_samples(ast, num_samples, num_rej, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
                 samples = tc.stack(samples).type(tc.float)
                 np.savetxt(results_file(i), samples)
-
+                print('')
                 # Calculate some properties of the samples
                 # print('Samples shape:', samples.shape)
                 # print('First sample:', samples[0])
@@ -98,9 +99,7 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
                 print('Sample standard deviation:', samples.std(axis=0))
 
                 # # W&B
-                # # if wandb_run and (prog_set == 'homework_4'): wandb_plots_homework4(samples, i)
-                # if wandb_run and (prog_set == 'homework_5'): wandb_plots_homework5(samples, i)
-                # if wandb_run and (prog_set == 'homework_6'): wandb_plots_homework6(samples, i)
+                if wandb_run and (prog_set == 'homework_6'): wandb_plots_homework6(samples, i)
 
                 # Finish
                 t_finish = time()
@@ -135,27 +134,6 @@ def run_all(cfg):
     # if wandb_run: wandb.init(project='HW6', entity='cs532-2022', name = 'elvis-IS')
     if wandb_run: wandb.init(project='project', entity='elvis_cai', name = 'elvis-project')
 
-    # # Deterministic tests
-    # tests = cfg['deterministic_tests']
-    # run_tests(tests, test_type='deterministic', base_dir=base_dir, daphne_dir=daphne_dir, compile=compile, verbose=False)
-
-    # # HOPPL tests
-    # tests = cfg['hoppl_deterministic_tests']
-    # run_tests(tests, test_type='hoppl-deterministic', base_dir=base_dir, daphne_dir=daphne_dir, compile=compile, verbose=False)
-
-    # # Probabilistic tests
-    # tests = cfg['probabilistic_tests']
-    # run_tests(tests, test_type='probabilistic', base_dir=base_dir, daphne_dir=daphne_dir, compile=compile, verbose=True)
-
-    # # Homework 4
-    # programs = cfg['homework4_programs']
-    # run_programs(programs, prog_set='homework_4', base_dir=base_dir, daphne_dir=daphne_dir, 
-    #     num_samples=num_samples, tmax=tmax, compile=compile, wandb_run=wandb_run, verbose=False)
-
-    # # Homework 5
-    # programs = cfg['homework5_programs']
-    # run_programs(programs, prog_set='homework_5', base_dir=base_dir, daphne_dir=daphne_dir, 
-    #     num_samples=num_samples, tmax=tmax, compile=compile, wandb_run=wandb_run, verbose=False)
 
     # Homework 6
     programs = cfg['homework6_programs']

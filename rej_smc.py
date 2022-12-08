@@ -1,26 +1,27 @@
 from evaluator import eval, Env, standard_env, Procedure
 
 import torch as tc
+import numpy as np
 from pyrsistent import pmap, pset
 import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import math
-from utils import resample_using_importance_weights, check_addresses, resample_rejsmc, calculate_effective_sample_size
+from utils import resample_using_importance_weights, check_addresses, calculate_effective_sample_size
 from lmh_book import trace_update
 from copy import deepcopy
+import time
 
 
-def get_rejSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='start', wandb_name=None, verbose=False):
-    '''
-    Generate a set of samples via Sequential Monte Carlo from a HOPPL program
-    '''
+def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', wandb_name=None, verbose=False):
+    
     particles = []
     weights = []
     logZs = []
     n_particles = num_samples
     Ds = []
     checkpoints = [None]*num_samples
+    num_observe = 0
 
     for i in range(n_particles):
         sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
@@ -31,56 +32,93 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='s
         weights.append(logW)
         Ds.append(pmap({}))
     
-    done = False
 
     while type(particles[0]) == tuple:
+        num_sample_original = 0
         for i in range(num_samples):
             ### Run program and stop at the observe. Store output in checkpoints
-            checkpoints[i] = psmc_trace_update(particles[i], Ds[i])
+            checkpoints[i] = rejsmc_trace_update(particles[i], Ds[i])
+            num_sample_original += checkpoints[i][6]
         
         ### If not tuple, then program finished
         if type(checkpoints[i]) != tuple: particles = [checkpoint for checkpoint in checkpoints]; break
 
+
+        ### Record # of observe
+        num_observe += 1
+
+
         ### Resample particles, Ds and checkpoints, based on weights
         particles = [checkpoint[2] for checkpoint in checkpoints]
         weights = [checkpoints[1] for checkpoints in checkpoints]
-        particles, Ds, checkpoints = resample_rejsmc(particles, Ds, checkpoints, weights)
+        particles, Ds, checkpoints, ESS_org, N = resample_rejsmc(particles, Ds, checkpoints, weights)
+        
 
+        if ESS_org/N < tc.tensor(0.85):
+            ### Rejunenation step
+            rej_start_time = time.time()
+            num_sample_rej_total = 0
+            for i in range(num_samples):
+                particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej)
+                num_sample_rej_total += num_sample_rej
+            rej_time = time.time()-rej_start_time
+            ESS_rej, N = calculate_effective_sample_size_rejsmc(weights, rej_time, False)
+            _ = summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total)
 
-        ### Rejunenation step
-        for i in range(num_samples):
-            particles[i], weights[i] = precond(checkpoints[i], num_preconds)
-
-        weights = tc.exp(tc.tensor(weights)).type(tc.float64)
-        weights = weights/weights.sum()
-        _ = calculate_effective_sample_size(weights, verbose=True)
+        else:
+            _ = summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original)
 
 
         ### Zero out weights
         for i in range(num_samples):
             particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0)) ### TODO: check which weight to reset
             cont, args, sig = particles[i]
-            particles[i] = cont(*args)
+            particles[i] = cont(*args) ### At 'observe', push to run
+
 
     return particles
 
+def summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total):
+    print('')
+    print('Observe', num_observe)
+    print('Sample size:', N)
+    print('SMC ESS', ESS_org)
+    print('SMC Fractional ESS', ESS_org/N)
+    print('Rejuvenated ESS:', ESS_rej)
+    print('Rejuvenated Fractional SS:', ESS_rej/N)
+    print('Rejuvenation time:', rej_time)
+    print('num_sample total smc:',  num_sample_original)
+    print('num_sample total rejuvenated', num_sample_rej_total)
+    return None
+
+def summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original):
+    print('')
+    print('Observe', num_observe)
+    print('Sample size:', N)
+    print('SMC ESS', ESS_org)
+    print('SMC Fractional ESS', ESS_org/N)
+    print('Rejuvenation not needed')
+    print('num_sample smc:',  num_sample_original)
+    return None
 
             
-def precond(checkpoint, num_preconds):
+def rejuvenate(checkpoint, num_rej):
     
     ### Run it once ###
-    px_old, py_old, k_old, D, names, num_sample_states_old = checkpoint
+    px_old, py_old, k_old, D, names, num_sample_states_old, _ = checkpoint
 
     ### If no sample statement ###
     if len(names) == 0:
-        return k_old, px_old + py_old
+        return k_old, px_old + py_old, 0
 
+    num_sample_visited = 0
 
-    for _ in range(num_preconds):
+    for _ in range(num_rej):
 
         ### Randomly select a sample statement
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
         target = names[rd_idx]
+        num_sample_visited  = num_sample_visited + len(names)- (rd_idx)
 
         ### Look up
         dist_mid, l_mid, [x_mid], k_mid, px_mid, py_mid, num_sample_states_mid = D[target]
@@ -96,7 +134,7 @@ def precond(checkpoint, num_preconds):
 
 
         ### Rerun ###
-        px_new, py_new, k_new, D_new, _, num_sample_states_new = psmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
+        px_new, py_new, k_new, D_new, _, num_sample_states_new, _ = rejsmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
 
 
         ### Rejection step
@@ -118,11 +156,11 @@ def precond(checkpoint, num_preconds):
         else:
             pass
 
-    return k_old, px_old + py_old 
+    return k_old, py_old, num_sample_visited
 
 
 
-def psmc_trace_update(k, D, px = None, py = None):
+def rejsmc_trace_update(k, D, px = None, py = None):
     
     ### Initialize px and py if first run
     if px == None or py == None: px = tc.tensor(0.0); py = tc.tensor(0.0)
@@ -130,6 +168,7 @@ def psmc_trace_update(k, D, px = None, py = None):
     ### Sample names and number of sample states
     names = []
     num_sample_states = tc.tensor(0.0)
+    num_sample_visited = 0
 
     ### Run particle:
 
@@ -153,6 +192,7 @@ def psmc_trace_update(k, D, px = None, py = None):
             ### Compute px, append to name
             px = px + l
             names.append(name)
+            num_sample_visited += 1
 
             ### Run program forward
             k = cont(*args)
@@ -171,7 +211,7 @@ def psmc_trace_update(k, D, px = None, py = None):
             ### Run pass this observe
             # k = cont(*args)
 
-            return px, py, k, D, names, num_sample_states
+            return px, py, k, D, names, num_sample_states, num_sample_visited
 
     return k
 
@@ -180,3 +220,40 @@ def psmc_trace_update(k, D, px = None, py = None):
 
 
 
+def calculate_effective_sample_size_rejsmc(weights:tc.Tensor, rej_time: int, verbose=True):
+    '''
+    Calculate the effective sample size via the importance weights
+    '''
+    weights = tc.exp(tc.tensor(weights)).type(tc.float64)
+    weights = weights/weights.sum()
+
+    N = len(weights)
+    weights /= weights.sum()
+    ESS = 1./(weights**2).sum()
+    ESS = ESS.type(tc.float)
+    if verbose:
+        print('')
+        print('Rejuvenation step')
+        print('Sample size:', N)
+        print('Rejuvenated Effective sample size:', ESS)
+        print('Rejuvenated Fractional sample size:', ESS/N)
+        print('Sum of weights:', weights.sum())
+        print('Rejuvenation time:', rej_time)
+        print('')
+    return ESS, N
+
+def resample_rejsmc(samples:list, Ds:list, checkpoints:list, log_weights:list, normalize=True, wandb_name=None):
+    '''
+    Use the (log) importance weights to resample so as to generate posterior samples 
+    '''
+    nsamples = len(samples)
+    weights = tc.exp(tc.tensor(log_weights)).type(tc.float64)
+    weights = weights/weights.sum()
+    ESS = calculate_effective_sample_size(weights, verbose=False)
+    indices = np.random.choice(nsamples, size=nsamples, replace=True, p=weights)
+    new_samples = [samples[index] for index in indices]
+    new_Ds = [Ds[index] for index in indices]
+    new_checkpoints = [checkpoints[index] for index in indices]
+    new_weights = tc.tensor([weights[index] for index in indices])
+    # ESS = calculate_effective_sample_size(new_weights, verbose=False)
+    return new_samples, new_Ds, new_checkpoints, ESS, len(weights)

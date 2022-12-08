@@ -17,7 +17,7 @@ hoppl_deterministic_tests: []
 probabilistic_tests: []
 homework4_programs: []
 homework5_programs: []
-homework6_programs: [7]
+homework6_programs: [2]
 
 # Inference method
 # inference: None
@@ -33,5 +33,5 @@ compile: False
 # Inference stuff
 num_samples: 1e4
 num_rej_run: [1]
-num_samples_run: [1e3, 1e4]
+num_samples_run: [1e4]
 tmax: 60 # Seconds
