@@ -23,6 +23,8 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
     checkpoints = [None]*num_samples
     num_observe = 0
 
+    ### Need to keep weight and update somehow.
+
     for i in range(n_particles):
         sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
         particle = eval(ast, sigma, standard_env(), verbose)("start", lambda x:x)
@@ -37,7 +39,7 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
         num_sample_original = 0
         for i in range(num_samples):
             ### Run program and stop at the observe. Store output in checkpoints
-            checkpoints[i] = rejsmc_trace_update(particles[i], Ds[i])
+            checkpoints[i] = rejsmc_trace_update(particles[i], Ds[i], None)
             num_sample_original += checkpoints[i][6]
         
         ### If not tuple, then program finished
@@ -50,23 +52,35 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
 
         ### Resample particles, Ds and checkpoints, based on weights
         particles = [checkpoint[2] for checkpoint in checkpoints]
-        weights = [checkpoints[1] for checkpoints in checkpoints]
+        weights = [checkpoint[1] for checkpoint in checkpoints]
+        Ds = [checkpoint[3] for checkpoint in checkpoints]
+
         particles, Ds, checkpoints, ESS_org, N = resample_rejsmc(particles, Ds, checkpoints, weights)
-        
 
-        if ESS_org/N < tc.tensor(0.85):
-            ### Rejunenation step
-            rej_start_time = time.time()
-            num_sample_rej_total = 0
-            for i in range(num_samples):
-                particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej)
-                num_sample_rej_total += num_sample_rej
-            rej_time = time.time()-rej_start_time
-            ESS_rej, N = calculate_effective_sample_size_rejsmc(weights, rej_time, False)
-            _ = summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total)
 
-        else:
-            _ = summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original)
+
+        ## Rejunenation step
+        rej_start_time = time.time()
+        num_sample_rej_total = 0
+        for i in range(num_samples):
+            particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej, num_observe)
+            num_sample_rej_total += num_sample_rej
+        rej_time = time.time()-rej_start_time
+        ESS_rej, N = calculate_effective_sample_size_rejsmc(weights, rej_time, False)
+
+        # if ESS_org/N < tc.tensor(0.85):
+        #     ### Rejunenation step
+        #     rej_start_time = time.time()
+        #     num_sample_rej_total = 0
+        #     for i in range(num_samples):
+        #         particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej)
+        #         num_sample_rej_total += num_sample_rej
+        #     rej_time = time.time()-rej_start_time
+        #     ESS_rej, N = calculate_effective_sample_size_rejsmc(weights, rej_time, False)
+        #     _ = summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total)
+
+        # else:
+        #     _ = summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original)
 
 
         ### Zero out weights
@@ -102,23 +116,26 @@ def summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original):
     return None
 
             
-def rejuvenate(checkpoint, num_rej):
+def rejuvenate(checkpoint, num_rej, num_observe):
     
     ### Run it once ###
     px_old, py_old, k_old, D, names, num_sample_states_old, _ = checkpoint
 
-    ### If no sample statement ###
-    if len(names) == 0:
-        return k_old, px_old + py_old, 0
+    # ### If no sample statement ###
+    # if len(names) == 0:
+    #     return k_old, px_old + py_old, 0
 
     num_sample_visited = 0
 
     for _ in range(num_rej):
 
-        ### Randomly select a sample statement
-        rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
-        target = names[rd_idx]
-        num_sample_visited  = num_sample_visited + len(names)- (rd_idx)
+        # ### Randomly select a sample statement
+        # rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
+        # target = names[rd_idx]
+        # num_sample_visited  = num_sample_visited + len(names)- (rd_idx)
+
+        rd_idx = random.choice(range(0, len(D.keys())))
+        target = D.keys()[rd_idx]
 
         ### Look up
         dist_mid, l_mid, [x_mid], k_mid, px_mid, py_mid, num_sample_states_mid = D[target]
@@ -128,13 +145,12 @@ def rejuvenate(checkpoint, num_rej):
         l_mid_new = dist_mid.log_prob(x_mid_new)
 
         ### Create new trace
-        # k_mid_new = deepcopy((k_mid[0], [x_mid_new], k_mid[2]))
         k_mid_new = (k_mid[0], [x_mid_new], k_mid[2])
         D_mid_new = D.set(target, [dist_mid, l_mid_new, [x_mid_new], k_mid_new, px_mid, py_mid, num_sample_states_mid])
 
 
         ### Rerun ###
-        px_new, py_new, k_new, D_new, _, num_sample_states_new, _ = rejsmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
+        px_new, py_new, k_new, D_new, _, num_sample_states_new, _= rejsmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid, num_observe)
 
 
         ### Rejection step
@@ -142,8 +158,6 @@ def rejuvenate(checkpoint, num_rej):
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
         rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
 
-        # rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
-        # rejection_btm = (px_old+py_old)  + tc.log(num_sample_states_old)
 
         rejection = tc.exp(rejection_top - rejection_btm)
 
@@ -160,7 +174,7 @@ def rejuvenate(checkpoint, num_rej):
 
 
 
-def rejsmc_trace_update(k, D, px = None, py = None):
+def rejsmc_trace_update(k, D, px = None, py = None, num_observe = None):
     
     ### Initialize px and py if first run
     if px == None or py == None: px = tc.tensor(0.0); py = tc.tensor(0.0)
@@ -169,6 +183,7 @@ def rejsmc_trace_update(k, D, px = None, py = None):
     names = []
     num_sample_states = tc.tensor(0.0)
     num_sample_visited = 0
+    num_obs_current = 0
 
     ### Run particle:
 
@@ -203,15 +218,24 @@ def rejsmc_trace_update(k, D, px = None, py = None):
             ### Extract info from run
             y = args
             dist = sigma['dist']
+            # observe_addr = sigma['address']
 
             ### Calculate py
             l = dist.log_prob(*y)
             py = py + l
+            num_obs_current += 1
 
             ### Run pass this observe
             # k = cont(*args)
 
-            return px, py, k, D, names, num_sample_states, num_sample_visited
+            if num_observe == None:
+                return px, py, k, D, names, num_sample_states, num_sample_visited
+
+            if num_obs_current < num_observe:
+                k = cont(*args)
+
+            else:
+                return px, py, k, D, names, num_sample_states, num_sample_visited
 
     return k
 

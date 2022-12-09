@@ -90,7 +90,6 @@ def lmh_sampler(k, num_samples, D):
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
         target = names[rd_idx]
 
-
         ##### Creating new trace and run #####
 
         # Look up the target sample in dictionary
