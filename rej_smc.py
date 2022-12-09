@@ -22,6 +22,8 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
     Ds = []
     checkpoints = [None]*num_samples
     num_observe = 0
+    ess = []
+    plot_files = []
 
     for i in range(n_particles):
         sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
@@ -31,7 +33,7 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
         particles.append(particle)
         weights.append(logW)
         Ds.append(pmap({}))
-    
+
 
     while type(particles[0]) == tuple:
         num_sample_original = 0
@@ -52,22 +54,21 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
         particles = [checkpoint[2] for checkpoint in checkpoints]
         weights = [checkpoints[1] for checkpoints in checkpoints]
         particles, Ds, checkpoints, ESS_org, N = resample_rejsmc(particles, Ds, checkpoints, weights)
+
+
+        ### Rejunenation step
+        rej_start_time = time.time()
+        num_sample_rej_total = 0
+        for i in range(num_samples):
+            particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej)
+            num_sample_rej_total += num_sample_rej
+        rej_time = time.time()-rej_start_time
+        ESS_rej = 0
+
+        _ = summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total)
+
+        ess.append(ESS_org/N)
         
-
-        if ESS_org/N < tc.tensor(0.85):
-            ### Rejunenation step
-            rej_start_time = time.time()
-            num_sample_rej_total = 0
-            for i in range(num_samples):
-                particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej)
-                num_sample_rej_total += num_sample_rej
-            rej_time = time.time()-rej_start_time
-            ESS_rej, N = calculate_effective_sample_size_rejsmc(weights, rej_time, False)
-            _ = summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total)
-
-        else:
-            _ = summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original)
-
 
         ### Zero out weights
         for i in range(num_samples):
@@ -75,8 +76,10 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
             cont, args, sig = particles[i]
             particles[i] = cont(*args) ### At 'observe', push to run
 
+    
 
-    return particles
+
+    return particles, ess
 
 def summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total):
     print('')

@@ -5,6 +5,8 @@ from time import time
 import wandb
 import hydra
 import sys
+import pandas as pd
+import pickle
 
 # Project imports
 from daphne import load_program
@@ -75,6 +77,7 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
 
     num_samples_run = (int(float(x)) for x in num_samples_run)
     num_samples_run = list(num_samples_run)
+    results = []
     # Loop over programs
     for i in programs:
         for num_samples in num_samples_run:
@@ -89,23 +92,37 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
                 print('Running log: \n')
                 ast = load_program(daphne_dir, daphne_prog(i), json_prog(i), mode='desugar-hoppl-cps', compile=compile)
                 samples = get_samples(ast, num_samples, num_rej, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
-                samples = tc.stack(samples).type(tc.float)
-                np.savetxt(results_file(i), samples)
-                print('')
-                # Calculate some properties of the samples
-                # print('Samples shape:', samples.shape)
-                # print('First sample:', samples[0])
-                print('Sample mean:', samples.mean(axis=0))
-                print('Sample standard deviation:', samples.std(axis=0))
 
-                # # W&B
-                if wandb_run and (prog_set == 'homework_6'): wandb_plots_homework6(samples, i)
+                if inference == "rejSMC":
+                    samples, ess = get_samples(ast, num_samples, num_rej, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
+                    samples = tc.stack(samples).type(tc.float)
+                    sample_mean = samples.mean(axis=0)
+                    sample_sd = samples.std(axis = 0)
+                    sample_results = [ess, sample_mean, sample_sd, num_samples, num_rej]
+                    print(sample_results)
+                    results.append(sample_results)
 
-                # Finish
-                t_finish = time()
-                print('Time taken [s]:', t_finish-t_start)
-                print('Number of samples:', len(samples))
-                print('Finished program {}\n'.format(i))
+                else:
+                    samples = tc.stack(samples).type(tc.float)
+                    np.savetxt(results_file(i), samples)
+                    print('')
+                    # Calculate some properties of the samples
+                    print('Sample mean:', samples.mean(axis=0))
+                    print('Sample standard deviation:', samples.std(axis=0))
+
+
+                    # # W&B
+                    if wandb_run and (prog_set == 'homework_6'): wandb_plots_homework6(samples, i)
+
+                    # Finish
+                    t_finish = time()
+                    print('Time taken [s]:', t_finish-t_start)
+                    print('Number of samples:', len(samples))
+                    print('Finished program {}\n'.format(i))
+    
+    print(results)
+    with open('data/rand/plots_rej_p3_1.pkl', 'wb') as f:
+        pickle.dump(results, f)
 
 
 @hydra.main(version_base=None, config_path='', config_name='config')

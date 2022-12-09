@@ -20,6 +20,9 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
     logZs = []
     n_particles = num_samples
     Ds = []
+    
+    total_num_sample_visited = 0
+    total_num_sample_rej = 0
 
     for i in range(n_particles):
         sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
@@ -34,35 +37,51 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
 
     while type(particles[0]) == tuple:
         for i in range(num_samples):
-            particles[i], weights[i] = precond(particles[i], Ds[i], num_preconds) ### run until observe, construct new trace from rd sample, compare
+            result = precond(particles[i], Ds[i], num_preconds)
+            if type(result) == tuple:
+                particles[i], weights[i], num_sample_visited, num_sample_rej = result
+                total_num_sample_visited += num_sample_visited
+                total_num_sample_rej += num_sample_rej
+            else:
+                # print(total_num_sample_visited)
+                # print(total_num_sample_rej)
+                return result
 
-        # if type(particles[0]) != tuple: break
-        # check_addresses(particles)
+
         particles = resample_using_importance_weights(particles, weights)
         for i in range(num_samples):
-            particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0)) ### TODO: check which weight to reset
+            particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0))
             cont, args, sig = particles[i]
             particles[i] = cont(*args)
 
+    print(total_num_sample_visited)
+    print(total_num_sample_rej)
     return particles
 
             
 def precond(particle, D, num_preconds):
-    
+
+    all_k_old = []
+    all_py_old = []
     ### Run it once ###
-    px_old, py_old, k_old, D, names, num_sample_states_old = psmc_trace_update(particle, D)
+    px_old, py_old, k_old, D, names, num_sample_states_old, num_sample_first_visited = psmc_trace_update(particle, D)
+
+    ### TODO: if ESS high, no need to rejuvenate
 
     ### If no sample statement ###
     if len(names) == 0:
-        return k_old, px_old + py_old
+        return k_old, px_old + py_old, num_sample_first_visited,  0
+
+    num_sample_rej = 0
 
 
-    for _ in range(num_preconds):
+    for _ in range(int(num_preconds)):
 
 
         ### Randomly select a sample statement
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
         target = names[rd_idx]
+        
 
         ### Look up
         dist_mid, l_mid, [x_mid], k_mid, px_mid, py_mid, num_sample_states_mid = D[target]
@@ -78,17 +97,13 @@ def precond(particle, D, num_preconds):
 
 
         ### Rerun ###
-        px_new, py_new, k_new, D_new, _, num_sample_states_new = psmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
-
+        px_new, py_new, k_new, D_new, _, num_sample_states_new, num_sample_visited = psmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
+        
+        num_sample_rej = num_sample_rej + num_sample_visited
 
         ### Rejection step
-
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
         rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
-
-        # rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
-        # rejection_btm = (px_old+py_old)  + tc.log(num_sample_states_old)
-
         rejection = tc.exp(rejection_top - rejection_btm)
 
         if tc.rand(1) < rejection:
@@ -100,7 +115,7 @@ def precond(particle, D, num_preconds):
         else:
             pass
 
-    return k_old, px_old + py_old 
+    return k_old, py_old, num_sample_first_visited, num_sample_visited
 
 
 
@@ -112,6 +127,7 @@ def psmc_trace_update(k, D, px = None, py = None):
     ### Sample names and number of sample states
     names = []
     num_sample_states = tc.tensor(0.0)
+    num_sample_visited = 0
 
     ### Run particle:
 
@@ -135,6 +151,7 @@ def psmc_trace_update(k, D, px = None, py = None):
             ### Compute px, append to name
             px = px + l
             names.append(name)
+            num_sample_visited += 1
 
             ### Run program forward
             k = cont(*args)
@@ -153,7 +170,7 @@ def psmc_trace_update(k, D, px = None, py = None):
             ### Run pass this observe
             # k = cont(*args)
 
-            return px, py, k, D, names, num_sample_states
+            return px, py, k, D, names, num_sample_states, num_sample_visited
 
     return k
 

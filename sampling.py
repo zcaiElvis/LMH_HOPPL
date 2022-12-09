@@ -26,7 +26,8 @@ def get_samples(ast:dict, num_samples:int, num_preconds:int, tmax=None, inferenc
     elif inference =="PSMC":
         samples = get_PSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
     elif inference == "rejSMC":
-        samples = get_rejSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
+        samples, plot_files = get_rejSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
+        return samples, plot_files
     else:
         print('Inference scheme:', inference, type(inference))
         raise ValueError('Inference scheme not recognised')
