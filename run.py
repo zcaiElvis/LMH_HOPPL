@@ -1,4 +1,3 @@
-# Standard imports
 import numpy as np
 import torch as tc
 from time import time
@@ -7,6 +6,8 @@ import hydra
 import sys
 import pandas as pd
 import pickle
+import os
+from time import time, strftime
 
 # Project imports
 from daphne import load_program
@@ -75,53 +76,33 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
         results_file = lambda i: 'data/%s/%d_%s.dat'%(prog_set, i, inference)
 
 
+    timestr = strftime("%m%d-%H%M")
+
     num_samples_run = (int(float(x)) for x in num_samples_run)
     num_samples_run = list(num_samples_run)
-    results = []
-    # Loop over programs
-    for i in programs:
-        for num_samples in num_samples_run:
-            for num_rej in num_rej_run:
-            # Get samples from the program
-                t_start = time()
-                wandb_name = 'Program %s'%i if wandb_run else None
-                print('Running: '+prog_set+':' ,i)
-                print('Inference method:', inference)
-                print('Sample size [log10]:', np.log10(num_samples))
-                print('Rejunenation times:', num_rej)
-                print('Running log: \n')
-                ast = load_program(daphne_dir, daphne_prog(i), json_prog(i), mode='desugar-hoppl-cps', compile=compile)
-                samples = get_samples(ast, num_samples, num_rej, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
+    num_samples_run = num_samples_run * 15
+    results = np.zeros((len(programs), len(inference), len(num_samples_run), len(num_rej_run)), dtype=object)
 
-                if inference == "rejSMC":
-                    samples, ess = get_samples(ast, num_samples, num_rej, tmax=tmax, inference=inference, wandb_name=wandb_name, verbose=verbose)
-                    samples = tc.stack(samples).type(tc.float)
-                    sample_mean = samples.mean(axis=0)
-                    sample_sd = samples.std(axis = 0)
-                    sample_results = [ess, sample_mean, sample_sd, num_samples, num_rej]
-                    print(sample_results)
-                    results.append(sample_results)
+    for p in range(len(programs)):
+        for i in range(len(inference)):
+            for j in range(len(num_samples_run)):
+                for k in range(len(num_rej_run)):
+                    ast = load_program(daphne_dir, daphne_prog(programs[p]), json_prog(programs[p]), mode='desugar-hoppl-cps', compile=compile)
+                    if inference[i] == "rejSMC" or inference[i] == "SMC":
+                        start_time = time()
+                        try:
+                            samples, ess = get_samples(ast, num_samples_run[j], num_rej_run[k], tmax=tmax, inference=inference[i], folder=timestr, program = programs[p], verbose=verbose)
+                        except:
+                            samples, ess = get_samples(ast, num_samples_run[j], num_rej_run[k], tmax=tmax, inference=inference[i], folder=timestr, program = programs[p], verbose=verbose)
+                        samples = tc.stack(samples).type(tc.float)
+                        print('Sample mean:', samples.mean(axis=0))
+                        print('Sample standard deviation:', samples.std(axis=0))
+                        end_time = time()-start_time
+                        print(end_time)
+                        results[p,i,j,k] = [samples, ess, end_time, num_samples_run, num_rej_run]
 
-                else:
-                    samples = tc.stack(samples).type(tc.float)
-                    np.savetxt(results_file(i), samples)
-                    print('')
-                    # Calculate some properties of the samples
-                    print('Sample mean:', samples.mean(axis=0))
-                    print('Sample standard deviation:', samples.std(axis=0))
-
-
-                    # # W&B
-                    if wandb_run and (prog_set == 'homework_6'): wandb_plots_homework6(samples, i)
-
-                    # Finish
-                    t_finish = time()
-                    print('Time taken [s]:', t_finish-t_start)
-                    print('Number of samples:', len(samples))
-                    print('Finished program {}\n'.format(i))
-    
-    print(results)
-    with open('data/rand/plots_rej_p3_1.pkl', 'wb') as f:
+    os.mkdir('data/{}'.format(timestr))
+    with open('data/{}/results.pkl'.format(timestr), 'wb') as f:
         pickle.dump(results, f)
 
 

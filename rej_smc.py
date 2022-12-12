@@ -13,7 +13,7 @@ from copy import deepcopy
 import time
 
 
-def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', wandb_name=None, verbose=False):
+def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', folder=None, program = None, verbose=False):
     
     particles = []
     weights = []
@@ -116,7 +116,7 @@ def rejuvenate(checkpoint, num_rej):
 
     num_sample_visited = 0
 
-    for _ in range(num_rej):
+    for _ in range(int(num_rej)):
 
         ### Randomly select a sample statement
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
@@ -140,6 +140,15 @@ def rejuvenate(checkpoint, num_rej):
         px_new, py_new, k_new, D_new, _, num_sample_states_new, _ = rejsmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
 
 
+
+
+        ### Accept ###
+        # k_old = k_new
+        # px_old = px_new
+        # py_old = py_new
+        # D = D_new
+        # num_sample_states_old = num_sample_states_new
+
         ### Rejection step
 
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
@@ -150,7 +159,7 @@ def rejuvenate(checkpoint, num_rej):
 
         rejection = tc.exp(rejection_top - rejection_btm)
 
-        if tc.rand(1) < rejection:
+        if tc.rand(1)/3 < rejection:
             k_old = k_new
             px_old = px_new
             py_old = py_new
@@ -211,8 +220,6 @@ def rejsmc_trace_update(k, D, px = None, py = None):
             l = dist.log_prob(*y)
             py = py + l
 
-            ### Run pass this observe
-            # k = cont(*args)
 
             return px, py, k, D, names, num_sample_states, num_sample_visited
 

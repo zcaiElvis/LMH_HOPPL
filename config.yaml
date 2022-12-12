@@ -17,15 +17,15 @@ hoppl_deterministic_tests: []
 probabilistic_tests: []
 homework4_programs: []
 homework5_programs: []
-homework6_programs: [3]
+homework6_programs: [4]
 
 # Inference method
 # inference: None
 # inference: IS
 # inference: SMC
 # inference: LMH
-inference: PSMC
-# inference: rejSMC
+# inference: PSMC
+inference: [rejSMC]
 
 # Compilation
 compile: False
@@ -35,5 +35,7 @@ num_samples: 1e4
 # num_rej_run: [1,1,1,1,1,1,1,1,1,1]
 # num_rej_run: [0,0,0,0,0,0,0,0,0,0]
 num_rej_run: [1e1]
-num_samples_run: [1e3]
+num_samples_run: [0.6e3, 1.6e3, 2.5e3, 3.7e3, 4.2e3, 5.5e3, 7e3]
+# num_samples_run: [2.8e3, 9e3, 13e3, 20e3, 25e3, 30e3, 36e3]
+# num_samples_run: [3e3, 9e3, 1.5e4, 2.1e4, 2.7e4, 3.3e4, 3.9e4]
 tmax: 60 # Seconds

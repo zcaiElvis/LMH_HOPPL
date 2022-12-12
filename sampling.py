@@ -11,28 +11,27 @@ from lmh_book import get_LMH_samples
 from psmc import get_PSMC_samples
 from rej_smc import get_rejSMC_samples
 
-def get_samples(ast:dict, num_samples:int, num_preconds:int, tmax=None, inference=None, wandb_name=None, verbose=False):
+def get_samples(ast:dict, num_samples:int, num_rej:int, tmax=None, inference=None, folder=None, program = None, verbose=False):
     '''
     Get some samples from a HOPPL program
     '''
     if inference is None:
-        samples = get_prior_samples(ast, num_samples, tmax, wandb_name, verbose)
+        samples = get_prior_samples(ast, num_samples, tmax, folder, verbose)
     elif inference == 'IS':
-        samples = get_importance_samples(ast, num_samples, tmax, wandb_name, verbose)
+        samples = get_importance_samples(ast, num_samples, tmax, folder, verbose)
     elif inference == 'SMC':
-        samples = get_SMC_samples(ast, num_samples, wandb_name, verbose)
+        samples = get_SMC_samples(ast, num_samples, folder, verbose)
     elif inference == "LMH":
-        samples = get_LMH_samples(ast, num_samples, wandb_name, verbose)
+        samples = get_LMH_samples(ast, num_samples, folder, verbose)
     elif inference =="PSMC":
-        samples = get_PSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
+        samples = get_PSMC_samples(ast, num_samples, num_rej, folder, verbose)
     elif inference == "rejSMC":
-        samples, plot_files = get_rejSMC_samples(ast, num_samples, num_preconds, wandb_name, verbose)
+        samples, plot_files = get_rejSMC_samples(ast, num_samples, num_rej, 'start',  folder = folder, program = program, verbose = verbose)
         return samples, plot_files
     else:
         print('Inference scheme:', inference, type(inference))
         raise ValueError('Inference scheme not recognised')
     return samples
-
 
 def get_prior_samples(ast:dict, num_samples:int, tmax=None, wandb_name=None, verbose=False):
     '''
@@ -142,5 +141,5 @@ def get_SMC_samples(ast:dict, num_samples:int, run_name='start', wandb_name=None
         smc_cnter += 1
     logZ = tc.tensor(logZs).sum(dim=0)
         
-    return particles
+    return particles, None
 
