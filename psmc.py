@@ -20,6 +20,7 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
     logZs = []
     n_particles = num_samples
     Ds = []
+    num_observe = 0
     
     total_num_sample_visited = 0
     total_num_sample_rej = 0
@@ -47,7 +48,11 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
                 # print(total_num_sample_rej)
                 return result
 
+        num_observe += 1
 
+        if num_observe ==1:
+            plt.hist(tc.exp(tc.tensor(weights)))
+            plt.savefig('psmc.png')
         particles = resample_using_importance_weights(particles, weights)
         for i in range(num_samples):
             particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0))
@@ -60,13 +65,11 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
 
             
 def precond(particle, D, num_preconds):
-
-    all_k_old = []
-    all_py_old = []
+    
     ### Run it once ###
     px_old, py_old, k_old, D, names, num_sample_states_old, num_sample_first_visited = psmc_trace_update(particle, D)
 
-    ### TODO: if ESS high, no need to rejuvenate
+    ### TODO: if ESS high, no need to resample
 
     ### If no sample statement ###
     if len(names) == 0:
@@ -102,6 +105,7 @@ def precond(particle, D, num_preconds):
         num_sample_rej = num_sample_rej + num_sample_visited
 
         ### Rejection step
+
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
         rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
         rejection = tc.exp(rejection_top - rejection_btm)

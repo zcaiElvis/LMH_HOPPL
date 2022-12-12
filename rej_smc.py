@@ -13,7 +13,7 @@ from copy import deepcopy
 import time
 
 
-def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', wandb_name=None, verbose=False):
+def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', folder=None, program = None, verbose=False):
     
     particles = []
     weights = []
@@ -22,8 +22,9 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
     Ds = []
     checkpoints = [None]*num_samples
     num_observe = 0
-    ess = []
+    esses = []
     plot_files = []
+
 
     for i in range(n_particles):
         sigma =  pmap({'values': '', 'logW':tc.tensor(0.), 'type': None, 'address': "start", 'num_sample_state': tc.tensor(0.0)})
@@ -33,6 +34,8 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
         particles.append(particle)
         weights.append(logW)
         Ds.append(pmap({}))
+
+    
 
 
     while type(particles[0]) == tuple:
@@ -48,27 +51,71 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
 
         ### Record # of observe
         num_observe += 1
+        print(num_observe)
 
 
-        ### Resample particles, Ds and checkpoints, based on weights
+        ### Get particles and weights
         particles = [checkpoint[2] for checkpoint in checkpoints]
-        weights = [checkpoints[1] for checkpoints in checkpoints]
-        particles, Ds, checkpoints, ESS_org, N = resample_rejsmc(particles, Ds, checkpoints, weights)
+        weights = [checkpoint[1] for checkpoint in checkpoints]
 
+        ess = calculate_effective_sample_size_rej(weights, verbose=True)
 
-        ### Rejunenation step
-        rej_start_time = time.time()
-        num_sample_rej_total = 0
-        for i in range(num_samples):
-            particles[i], weights[i], num_sample_rej = rejuvenate(checkpoints[i], num_rej)
-            num_sample_rej_total += num_sample_rej
-        rej_time = time.time()-rej_start_time
-        ESS_rej = 0
+        if ess/num_samples > 0.75:
+            pass
+            
+        else:
+            ### "Rejuvenate"
+            plt.hist(tc.exp(tc.tensor(weights)))
+            plt.savefig('rej/num_observe{}.png'.format(num_observe))
+            plt.close()
 
-        _ = summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total)
+            ### TODO: Here test convergence to uniform, now use a fixed number of loops
+            for rej_time in range(int(num_rej)):
 
-        ess.append(ESS_org/N)
+                # Compute & normalize inv weights
+                inv_weights = tc.tensor([tc.tensor(1.)/tc.exp(w) for w in weights]).numpy()
+                inv_weights = inv_weights/sum(inv_weights)
+                
+                # Resample inv weights, select with or without replacement?
+                # indices_sel = np.random.choice(num_samples, size=num_samples, replace=False, p=inv_weights)
+                indices_sel = np.random.choice(num_samples, size=math.floor(num_samples/(3*(rej_time+1))), replace=False, p=inv_weights) # this push 15 times is the best
+                # indices_sel = np.random.choice(num_samples, size=math.floor(num_samples/(2*(rej_time+1))), replace=False, p=inv_weights)
+                # indices_sel = np.random.choice(num_samples, size=num_samples, replace=True, p=inv_weights)
+                # indices_sel = np.unique(indices_sel)
+                indices_nos = list(set(range(num_samples))-set(indices_sel))
+                # print("Need this much rejuvenation",len(indices_sel))
+                
+                if len(indices_sel)+len(indices_nos) != num_samples:
+                    raise Exception("Lost particles in splitting")
+
+                # Split to two sets: candidates vs not candidates
+                candies_checkpoints = [checkpoints[idx] for idx in indices_sel]
+                norej_checkpoints = [checkpoints[idx] for idx in indices_nos]
+                
+                rejed_checkpoints=[]
+                for checkpoint in candies_checkpoints:
+                    checkpoint = rejuvenate(checkpoint, 50)
+                    rejed_checkpoints.append(checkpoint)
+
+                
+                checkpoints = rejed_checkpoints + norej_checkpoints
+                weights = [checkpoints[1] + checkpoints[0] for checkpoints in checkpoints]
+                plt.hist(tc.exp(tc.tensor(weights)))
+                plt.ylim([0, num_samples])
+                plt.savefig('data/{}/p{}_obs{}_rej{}.png'.format(folder, program, num_observe, rej_time)) 
+                plt.close()
+            ## Resample particles
+            
+            
+        ess = calculate_effective_sample_size_rej(weights, True)
+        esses.append(ess/num_samples)
         
+        checkpoints = resample_rejsmc(checkpoints, weights)
+        
+        particles = [checkpoint[2] for checkpoint in checkpoints]
+        weights = [checkpoint[1] for checkpoint in checkpoints]
+        Ds = [checkpoint[3] for checkpoint in checkpoints]
+
 
         ### Zero out weights
         for i in range(num_samples):
@@ -76,10 +123,11 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
             cont, args, sig = particles[i]
             particles[i] = cont(*args) ### At 'observe', push to run
 
-    
+
+        
 
 
-    return particles, ess
+    return particles, esses, 
 
 def summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total):
     print('')
@@ -112,11 +160,11 @@ def rejuvenate(checkpoint, num_rej):
 
     ### If no sample statement ###
     if len(names) == 0:
-        return k_old, px_old + py_old, 0
+        return px_old, py_old, k_old, D, names, num_sample_states_old, _
 
     num_sample_visited = 0
 
-    for _ in range(num_rej):
+    for _ in range(int(num_rej)):
 
         ### Randomly select a sample statement
         rd_idx = random.choice(range(0, len(names))) # position of the randomly selected sample point
@@ -159,7 +207,7 @@ def rejuvenate(checkpoint, num_rej):
         else:
             pass
 
-    return k_old, py_old, num_sample_visited
+    return px_old, py_old, k_old, D, names, num_sample_states_old, None
 
 
 
@@ -245,18 +293,22 @@ def calculate_effective_sample_size_rejsmc(weights:tc.Tensor, rej_time: int, ver
         print('')
     return ESS, N
 
-def resample_rejsmc(samples:list, Ds:list, checkpoints:list, log_weights:list, normalize=True, wandb_name=None):
+def resample_rejsmc(checkpoints:list, log_weights:list, normalize=True, wandb_name=None):
     '''
     Use the (log) importance weights to resample so as to generate posterior samples 
     '''
-    nsamples = len(samples)
+    nsamples = len(checkpoints)
     weights = tc.exp(tc.tensor(log_weights)).type(tc.float64)
     weights = weights/weights.sum()
     ESS = calculate_effective_sample_size(weights, verbose=False)
     indices = np.random.choice(nsamples, size=nsamples, replace=True, p=weights)
-    new_samples = [samples[index] for index in indices]
-    new_Ds = [Ds[index] for index in indices]
     new_checkpoints = [checkpoints[index] for index in indices]
-    new_weights = tc.tensor([weights[index] for index in indices])
     # ESS = calculate_effective_sample_size(new_weights, verbose=False)
-    return new_samples, new_Ds, new_checkpoints, ESS, len(weights)
+    return new_checkpoints
+
+
+def calculate_effective_sample_size_rej(weights, verbose= False):
+    weights = tc.exp(tc.tensor(weights)).type(tc.float64)
+    weights = weights/weights.sum()
+    ESS = calculate_effective_sample_size(weights, verbose)
+    return ESS
