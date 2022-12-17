@@ -55,19 +55,17 @@ def get_importance_samples(ast:dict, num_samples:int, tmax=None, wandb_name=None
     '''
     samples = []
     log_weights = []
-    if (tmax is not None): max_time = time()+tmax
+    # if (tmax is not None): max_time = time()+tmax
     for i in range(num_samples):
         # sigma = pmap({'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0})
         # sigma = {'logW':tc.tensor(0.), 'address':'', 'num_sample_state': 0}
         sample, sigma = evaluate(ast, sig = None, verbose=verbose)
-        if wandb_name is not None: log_sample_to_wandb(sample, i, wandb_name=wandb_name)
         samples.append(sample)
         log_weights.append(sigma['logW'])
-        if (tmax is not None) and (time() > max_time): break
 
     resamples = resample_using_importance_weights(samples, log_weights)
     
-    return resamples
+    return resamples[0]
 
 
 

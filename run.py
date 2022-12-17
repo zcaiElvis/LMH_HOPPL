@@ -74,7 +74,7 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
     if inference is None:
         results_file = lambda i: 'data/%s/%d.dat'%(prog_set, i)
     else:
-        results_file = lambda i: 'data/%s/%d_%s.dat'%(prog_set, i, inference)
+        results_file = lambda i, j: 'data/%s/%d_%s.dat'%(prog_set, i, j)
 
 
     timestr = strftime("%m%d-%H%M")
@@ -82,7 +82,7 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
 
     num_samples_run = (int(float(x)) for x in num_samples_run)
     num_samples_run = list(num_samples_run)
-    # num_samples_run = num_samples_run * 15
+    num_samples_run = num_samples_run * 40
     results = np.zeros((len(programs), len(inference), len(num_samples_run), len(num_rej_run)), dtype=object)
 
     for p in range(len(programs)):
@@ -101,7 +101,20 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
                         print('Sample standard deviation:', samples.std(axis=0))
                         end_time = time()-start_time
                         print(end_time)
-                        results[p,i,j,k] = [samples, ess, end_time, num_samples_run, num_rej_run]
+                        results[p,i,j,k] = [samples, ess, end_time, num_samples_run[j], num_rej_run[k]]
+
+                    else:
+                        start_time = time()
+                        samples = get_samples(ast, num_samples_run[j], num_rej_run[k], tmax=tmax, inference=inference[i], folder=timestr, program = programs[p], verbose=verbose)
+                        samples = tc.stack(samples).type(tc.float)
+                        end_time = time()-start_time
+                        print(end_time)
+                        np.savetxt(results_file(programs[p], inference[i]), samples)
+                        results[p,i,j,k] = [samples, end_time, num_samples_run[j], num_rej_run[k]]
+                        print('')
+                        # Calculate some properties of the samples
+                        print('Sample mean:', samples.mean(axis=0))
+                        print('Sample standard deviation:', samples.std(axis=0))
 
     with open('data/{}/results.pkl'.format(timestr), 'wb') as f:
         pickle.dump(results, f)
