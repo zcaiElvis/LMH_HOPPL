@@ -82,7 +82,7 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
 
     num_samples_run = (int(float(x)) for x in num_samples_run)
     num_samples_run = list(num_samples_run)
-    num_samples_run = num_samples_run * 40
+    num_samples_run = num_samples_run * 8
     results = np.zeros((len(programs), len(inference), len(num_samples_run), len(num_rej_run)), dtype=object)
 
     for p in range(len(programs)):

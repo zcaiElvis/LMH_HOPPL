@@ -94,7 +94,7 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
                 
                 rejed_checkpoints=[]
                 for checkpoint in candies_checkpoints:
-                    checkpoint = rejuvenate(checkpoint, 50)
+                    checkpoint = rejuvenate(checkpoint, 1)
                     rejed_checkpoints.append(checkpoint)
 
                 
@@ -193,8 +193,6 @@ def rejuvenate(checkpoint, num_rej):
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
         rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
 
-        # rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
-        # rejection_btm = (px_old+py_old)  + tc.log(num_sample_states_old)
 
         rejection = tc.exp(rejection_top - rejection_btm)
 

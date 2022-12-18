@@ -61,6 +61,7 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
 
     print(total_num_sample_visited)
     print(total_num_sample_rej)
+    
     return particles
 
             
