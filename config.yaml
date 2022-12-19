@@ -25,7 +25,7 @@ homework6_programs: [4]
 # inference: SMC
 # inference: LMH
 # inference: PSMC
-inference: [rejSMC]
+inference: [PSMC]
 
 # Compilation
 compile: False
@@ -34,8 +34,11 @@ compile: False
 num_samples: 1e4
 # num_rej_run: [1,1,1,1,1,1,1,1,1,1]
 # num_rej_run: [0,0,0,0,0,0,0,0,0,0]
-num_rej_run: [1e1]
-num_samples_run: [0.6e3, 1.6e3, 2.5e3, 3.7e3, 4.2e3, 5.5e3, 7e3]
+# num_rej_run: [1, 15, 30, 45, 60, 75, 90, 105, 130]
+num_rej_run: [30]
+# num_samples_run: [1.6e2, 4.1e2, 5.8e2, 8.8e2, 13e2, 16e2, 2.2e3]
+# num_samples_run: [0.6e3, 1.6e3, 2.5e3, 3.7e3, 4.2e3, 5.5e3, 7e3]
 # num_samples_run: [2.8e3, 9e3, 13e3, 20e3, 25e3, 30e3, 36e3]
 # num_samples_run: [3e3, 9e3, 1.5e4, 2.1e4, 2.7e4, 3.3e4, 3.9e4]
+num_samples_run: [2e3]
 tmax: 60 # Seconds

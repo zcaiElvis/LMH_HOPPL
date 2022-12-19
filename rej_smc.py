@@ -140,26 +140,14 @@ def rejuvenate(checkpoint, num_rej):
         px_new, py_new, k_new, D_new, _, num_sample_states_new, _ = rejsmc_trace_update(k_mid_new, D_mid_new, px_mid, py_mid)
 
 
-
-
-        ### Accept ###
-        # k_old = k_new
-        # px_old = px_new
-        # py_old = py_new
-        # D = D_new
-        # num_sample_states_old = num_sample_states_new
-
         ### Rejection step
 
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
         rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
 
-        # rejection_top = (px_new+py_new) + tc.log(num_sample_states_new)
-        # rejection_btm = (px_old+py_old)  + tc.log(num_sample_states_old)
-
         rejection = tc.exp(rejection_top - rejection_btm)
 
-        if tc.rand(1)/3 < rejection:
+        if tc.rand(1) < rejection:
             k_old = k_new
             px_old = px_new
             py_old = py_new

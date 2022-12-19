@@ -80,7 +80,11 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
 
     num_samples_run = (int(float(x)) for x in num_samples_run)
     num_samples_run = list(num_samples_run)
-    num_samples_run = num_samples_run * 15
+    # num_samples_run = num_samples_run * 20
+    # num_rej_run = (int(float(x)) for x in num_rej_run)
+    # num_rej_run = list(num_rej_run)
+    # num_rej_run = num_rej_run*10
+
     results = np.zeros((len(programs), len(inference), len(num_samples_run), len(num_rej_run)), dtype=object)
 
     for p in range(len(programs)):
@@ -99,7 +103,7 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
                         print('Sample standard deviation:', samples.std(axis=0))
                         end_time = time()-start_time
                         print(end_time)
-                        results[p,i,j,k] = [samples, ess, end_time, num_samples_run, num_rej_run]
+                        results[p,i,j,k] = [samples, ess, end_time, num_samples_run[j], num_rej_run[k]]
 
     os.mkdir('data/{}'.format(timestr))
     with open('data/{}/results.pkl'.format(timestr), 'wb') as f:
