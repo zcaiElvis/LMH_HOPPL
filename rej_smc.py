@@ -69,7 +69,6 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
             plt.savefig('rej/num_observe{}.png'.format(num_observe))
             plt.close()
 
-            ### TODO: Here test convergence to uniform, now use a fixed number of loops
             for rej_time in range(int(num_rej)):
 
                 # Compute & normalize inv weights
@@ -77,7 +76,6 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
                 inv_weights = inv_weights/sum(inv_weights)
                 
                 # Resample inv weights, select with or without replacement?
-                # indices_sel = np.random.choice(num_samples, size=num_samples, replace=False, p=inv_weights)
                 indices_sel = np.random.choice(num_samples, size=math.floor(num_samples/(3*(rej_time+1))), replace=False, p=inv_weights) # this push 15 times is the best
                 # indices_sel = np.random.choice(num_samples, size=math.floor(num_samples/(2*(rej_time+1))), replace=False, p=inv_weights)
                 # indices_sel = np.random.choice(num_samples, size=num_samples, replace=True, p=inv_weights)
@@ -119,12 +117,10 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
 
         ### Zero out weights
         for i in range(num_samples):
-            particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0)) ### TODO: check which weight to reset
+            particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0))
             cont, args, sig = particles[i]
             particles[i] = cont(*args) ### At 'observe', push to run
 
-
-        
 
 
     return particles, esses, 
