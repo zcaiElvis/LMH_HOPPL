@@ -62,7 +62,7 @@ def get_PSMC_samples(ast:dict, num_samples:int, num_preconds:int,  run_name='sta
     print(total_num_sample_visited)
     print(total_num_sample_rej)
     
-    return particles
+    return particles, None
 
             
 def precond(particle, D, num_preconds):
@@ -70,7 +70,6 @@ def precond(particle, D, num_preconds):
     ### Run it once ###
     px_old, py_old, k_old, D, names, num_sample_states_old, num_sample_first_visited = psmc_trace_update(particle, D)
 
-    ### TODO: if ESS high, no need to resample
 
     ### If no sample statement ###
     if len(names) == 0:
