@@ -108,6 +108,7 @@ def precond(particle, D, num_preconds):
 
         rejection_top = (px_new+py_new) + l_mid + tc.log(num_sample_states_new)
         rejection_btm = (px_old+py_old) + l_mid_new + tc.log(num_sample_states_old)
+        
         rejection = tc.exp(rejection_top - rejection_btm)
 
         if tc.rand(1) < rejection:

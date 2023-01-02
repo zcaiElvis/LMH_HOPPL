@@ -13,7 +13,7 @@ from copy import deepcopy
 import time
 
 
-def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', folder=None, program = None, verbose=False):
+def get_post_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start', folder=None, program = None, verbose=False):
     
     particles = []
     weights = []
@@ -53,35 +53,29 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
         num_observe += 1
         print(num_observe)
 
-
-        ### Get particles and weights
-        particles = [checkpoint[2] for checkpoint in checkpoints]
+        ### Resampled, do not even the weights
         weights = [checkpoint[1] for checkpoint in checkpoints]
+        checkpoints, ess = resample_rejsmc(num_samples, checkpoints, weights)
 
-        ess = calculate_effective_sample_size_rej(weights, verbose=True)
+        num_sample_visited = checkpoints[0][-1]
 
-        if ess/num_samples > 0.35:
+
+
+        if ess > 0.35:
             pass
             
-        else:
-            ### "Rejuvenate"
-            plt.hist(tc.exp(tc.tensor(weights)))
-            plt.savefig('data/{}/obs{}.png'.format(folder, num_observe)) 
-            plt.close()
+        elif num_sample_original != 0:
 
             for rej_time in range(int(num_rej)):
 
                 # Compute & normalize inv weights
+                weights = [checkpoint[1] for checkpoint in checkpoints]
                 inv_weights = tc.tensor([tc.tensor(1.)/tc.exp(w) for w in weights]).numpy()
                 inv_weights = inv_weights/sum(inv_weights)
-                
+
                 # Resample inv weights, select with or without replacement?
                 indices_sel = np.random.choice(num_samples, size=math.floor(num_samples/(3*(rej_time+1))), replace=False, p=inv_weights) # this push 15 times is the best
-                # indices_sel = np.random.choice(num_samples, size=math.floor(num_samples/(2*(rej_time+1))), replace=False, p=inv_weights)
-                # indices_sel = np.random.choice(num_samples, size=num_samples, replace=True, p=inv_weights)
-                # indices_sel = np.unique(indices_sel)
                 indices_nos = list(set(range(num_samples))-set(indices_sel))
-                # print("Need this much rejuvenation",len(indices_sel))
                 
                 if len(indices_sel)+len(indices_nos) != num_samples:
                     raise Exception("Lost particles in splitting")
@@ -104,49 +98,17 @@ def get_rejSMC_samples(ast:dict, num_samples:int, num_rej:int,  run_name='start'
                 plt.close()
             ## Resample particles
             
-            
-        ess = calculate_effective_sample_size_rej(weights, True)
-        esses.append(ess/num_samples)
-        
-        checkpoints = resample_rejsmc(checkpoints, weights)
-        
+
+        ### Zero out weights and run
         particles = [checkpoint[2] for checkpoint in checkpoints]
-        weights = [checkpoint[1] for checkpoint in checkpoints]
-        Ds = [checkpoint[3] for checkpoint in checkpoints]
-
-
-        ### Zero out weights
         for i in range(num_samples):
             particles[i][0].sig = particles[i][0].sig.set('logW', tc.tensor(0.0))
             cont, args, sig = particles[i]
-            particles[i] = cont(*args) ### At 'observe', push to run
+            particles[i] = cont(*args) 
 
 
 
     return particles, esses
-
-def summary_iter(num_observe, ESS_org, ESS_rej, rej_time,  N, num_sample_original, num_sample_rej_total):
-    print('')
-    print('Observe', num_observe)
-    print('Sample size:', N)
-    print('SMC ESS', ESS_org)
-    print('SMC Fractional ESS', ESS_org/N)
-    print('Rejuvenated ESS:', ESS_rej)
-    print('Rejuvenated Fractional SS:', ESS_rej/N)
-    print('Rejuvenation time:', rej_time)
-    print('num_sample total smc:',  num_sample_original)
-    print('num_sample total rejuvenated', num_sample_rej_total)
-    return None
-
-def summary_non_rej_iter(num_observe, ESS_org, N, num_sample_original):
-    print('')
-    print('Observe', num_observe)
-    print('Sample size:', N)
-    print('SMC ESS', ESS_org)
-    print('SMC Fractional ESS', ESS_org/N)
-    print('Rejuvenation not needed')
-    print('num_sample smc:',  num_sample_original)
-    return None
 
             
 def rejuvenate(checkpoint, num_rej):
@@ -253,8 +215,6 @@ def rejsmc_trace_update(k, D, px = None, py = None):
             l = dist.log_prob(*y)
             py = py + l
 
-            ### Run pass this observe
-            # k = cont(*args)
 
             return px, py, k, D, names, num_sample_states, num_sample_visited
 
@@ -287,19 +247,16 @@ def calculate_effective_sample_size_rejsmc(weights:tc.Tensor, rej_time: int, ver
         print('')
     return ESS, N
 
-def resample_rejsmc(checkpoints:list, log_weights:list, normalize=True, wandb_name=None):
-    '''
-    Use the (log) importance weights to resample so as to generate posterior samples 
-    '''
-    nsamples = len(checkpoints)
+def resample_rejsmc(nsamples, checkpoints:list, log_weights:list, normalize=True, wandb_name=None):
     weights = tc.exp(tc.tensor(log_weights)).type(tc.float64)
     weights = weights/weights.sum()
     ESS = calculate_effective_sample_size(weights, verbose=False)
     indices = np.random.choice(nsamples, size=nsamples, replace=True, p=weights)
+    # new_samples = [samples[index] for index in indices]
+    # new_Ds = [Ds[index] for index in indices]
     new_checkpoints = [checkpoints[index] for index in indices]
-    # ESS = calculate_effective_sample_size(new_weights, verbose=False)
-    return new_checkpoints
-
+    # new_weights = tc.tensor([weights[index] for index in indices])
+    return new_checkpoints, ESS/nsamples
 
 def calculate_effective_sample_size_rej(weights, verbose= False):
     weights = tc.exp(tc.tensor(weights)).type(tc.float64)

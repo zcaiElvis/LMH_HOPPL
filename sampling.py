@@ -11,6 +11,7 @@ from utils import check_addresses
 from lmh_book import get_LMH_samples
 from psmc import get_PSMC_samples
 from rej_smc import get_rejSMC_samples
+from post_rej_smc import get_post_rejSMC_samples
 
 def get_samples(ast:dict, num_samples:int, num_rej:int, tmax=None, inference=None, folder=None, program = None, verbose=False):
     '''
@@ -28,6 +29,9 @@ def get_samples(ast:dict, num_samples:int, num_rej:int, tmax=None, inference=Non
         samples = get_PSMC_samples(ast, num_samples, num_rej, folder, verbose)
     elif inference == "rejSMC":
         samples, plot_files = get_rejSMC_samples(ast, num_samples, num_rej, 'start',  folder = folder, program = program, verbose = verbose)
+        return samples, plot_files
+    elif inference == "postSMC":
+        samples, plot_files = get_post_rejSMC_samples(ast, num_samples, num_rej, 'start',  folder = folder, program = program, verbose = verbose)
         return samples, plot_files
     else:
         print('Inference scheme:', inference, type(inference))

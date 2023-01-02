@@ -78,15 +78,16 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
 
 
     timestr = strftime("%m%d-%H%M")
-    os.mkdir('data/{}'.format(timestr))
+
+    if not os.path.isdir('data/{}'): os.mkdir('data/{}'.format(timestr))
 
     num_samples_run = (int(float(x)) for x in num_samples_run)
     num_samples_run = list(num_samples_run)
-    # num_samples_run = num_samples_run * 8
+    num_samples_run = num_samples_run * 15
 
-    num_rej_run = (int(float(x)) for x in num_rej_run)
-    num_rej_run = list(num_rej_run)
-    # num_rej_run = num_rej_run*20
+    # num_rej_run = (int(float(x)) for x in num_rej_run)
+    # num_rej_run = list(num_rej_run)
+    # num_rej_run = num_rej_run * 10
 
     results = np.zeros((len(programs), len(inference), len(num_samples_run), len(num_rej_run)), dtype=object)
 
@@ -95,11 +96,12 @@ def run_programs(programs, prog_set, base_dir, daphne_dir, num_samples=int(1e3),
             for j in range(len(num_samples_run)):
                 for k in range(len(num_rej_run)):
                     ast = load_program(daphne_dir, daphne_prog(programs[p]), json_prog(programs[p]), mode='desugar-hoppl-cps', compile=compile)
-                    if inference[i] == "rejSMC" or inference[i] == "SMC" or inference[i] == "PSMC":
+                    if inference[i] == "rejSMC" or inference[i] == "SMC" or inference[i] == "PSMC" or inference[i] == "postSMC":
                         start_time = time()
                         try:
                             samples, ess = get_samples(ast, num_samples_run[j], num_rej_run[k], tmax=tmax, inference=inference[i], folder=timestr, program = programs[p], verbose=verbose)
                         except:
+                            print("error occured")
                             samples, ess = get_samples(ast, num_samples_run[j], num_rej_run[k], tmax=tmax, inference=inference[i], folder=timestr, program = programs[p], verbose=verbose)
                         samples = tc.stack(samples).type(tc.float)
                         print('Sample mean:', samples.mean(axis=0))
