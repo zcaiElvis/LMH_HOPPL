@@ -1,0 +1,16 @@
+wandb_run: false
+seed: None
+base_dir: ../LMH_HOPPL
+daphne_dir: ../daphne
+recursion_limit: 5000
+deterministic_tests: []
+hoppl_deterministic_tests: []
+probabilistic_tests: []
+homework4_programs: []
+homework5_programs: []
+homework6_programs:
+- 7
+inference: LMH
+compile: true
+num_samples: 100000.0
+tmax: 60

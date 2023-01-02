@@ -12,10 +12,13 @@ def calculate_effective_sample_size(weights:tc.Tensor, verbose=False):
     ESS = 1./(weights**2).sum()
     ESS = ESS.type(tc.float)
     if verbose:
+        print('')
+        print('SMC step')
         print('Sample size:', N)
         print('Effective sample size:', ESS)
         print('Fractional sample size:', ESS/N)
         print('Sum of weights:', weights.sum())
+        print('')
     return ESS
 
 
@@ -33,6 +36,26 @@ def resample_using_importance_weights(samples:list, log_weights:list, normalize=
         for i, sample in enumerate(new_samples):
             log_sample_to_wandb(sample, i, wandb_name, resample=True)
     return new_samples
+
+######
+def resample_rejsmc(samples:list, Ds:list, checkpoints:list, log_weights:list, normalize=True, wandb_name=None):
+    '''
+    Use the (log) importance weights to resample so as to generate posterior samples 
+    '''
+    nsamples = len(samples)
+    weights = tc.exp(tc.tensor(log_weights)).type(tc.float64)
+    weights = weights/weights.sum()
+    _ = calculate_effective_sample_size(weights, verbose=True)
+    indices = np.random.choice(nsamples, size=nsamples, replace=True, p=weights)
+    new_samples = [samples[index] for index in indices]
+    new_Ds = [Ds[index] for index in indices]
+    new_checkpoints = [checkpoints[index] for index in indices]
+    if wandb_name is not None:
+        for i, sample in enumerate(new_samples):
+            log_sample_to_wandb(sample, i, wandb_name, resample=True)
+    return new_samples, new_Ds, new_checkpoints
+
+######
 
 
 def check_addresses(samples:list):

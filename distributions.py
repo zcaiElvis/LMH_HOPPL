@@ -117,45 +117,42 @@ class Dirichlet(tc.distributions.Dirichlet):
 
 class Bernoulli(tc.distributions.Bernoulli):
     
-    def __init__(self, probs=None, logits=None):
-        if logits is None and probs is None:
-            raise ValueError('Set either probs or logits')
-        elif logits is None:
-            if type(probs) is float:
-                probs = tc.tensor(probs)
-            logits = tc.log(probs/(1.-probs)) # NOTE: This will fail if probs = 0
-        super().__init__(logits=logits)
-
+    def __init__(self, probs=None):
+        # if logits is None and probs is None:
+        #     raise ValueError('Set either probs or logits')
+        # elif logits is None:
+        #     if type(probs) is float:
+        #         probs = tc.tensor(probs)
+        #     logits = tc.log(probs/(1.-probs)) # NOTE: This will fail if probs = 0
+        super().__init__(probs)
+        self.probs = probs
+        self._param = self.probs
+        
     def params(self):
-        return [self.logits]
-
-    def optim_params(self):
-        return [self.logits.requires_grad_()]
+        return [self.probs]
 
 
 class Categorical(tc.distributions.Categorical):
 
-    def __init__(self, probs=None, logits=None):
-        if (probs is None) and (logits is None):
-            raise ValueError('Either `probs` or `logits` must be specified, but not both')
-        if probs is not None:
-            if probs.dim() < 1:
-                raise ValueError('`probs` parameter must be at least one-dimensional')
-            probs = probs/probs.sum(-1, keepdim=True)
-            logits = tc.distributions.utils.probs_to_logits(probs)
-        else:
-            if logits.dim() < 1:
-                raise ValueError('`logits` parameter must be at least one-dimensional')
-            logits = logits-logits.logsumexp(dim=-1, keepdim=True) # Normalize
-        super().__init__(logits=logits)
-        self.logits = logits
-        self._param = self.logits
+    def __init__(self, probs=None):
+        # if (probs is None) and (logits is None):
+        #     raise ValueError('Either `probs` or `logits` must be specified, but not both')
+        # if probs is not None:
+        #     if probs.dim() < 1:
+        #         raise ValueError('`probs` parameter must be at least one-dimensional')
+        #     probs = probs/probs.sum(-1, keepdim=True)
+        #     logits = tc.distributions.utils.probs_to_logits(probs)
+        # else:
+        #     if logits.dim() < 1:
+        #         raise ValueError('`logits` parameter must be at least one-dimensional')
+        #     logits = logits-logits.logsumexp(dim=-1, keepdim=True) # Normalize
+        super().__init__(probs=probs)
+        self.probs = probs
+        self._param = self.probs
 
     def params(self):
-        return [self.logits]
+        return [self.probs]
 
-    def optim_params(self):
-        return [self.logits.requires_grad_()]
 
 
 if __name__ == '__main__':

@@ -82,6 +82,12 @@ def isempty(vec):
     else:
         return len(vec) == 0
 
+def newand(a,b):
+    return tc.logical_and(tc.tensor(a), tc.tensor(b))
+
+def newor(a,b):
+    return tc.logical_or(tc.tensor(a), tc.tensor(b))
+
 
 # Primitive function dictionary
 # NOTE: Fill this in
@@ -101,6 +107,9 @@ primitives = {
     '/': lambda *x: x[-1](tc.divide(*x[1:-1])),
     '-': lambda *x: x[-1](tc.subtract(*x[1:-1])),
     'log': lambda *x: x[-1](tc.log(*x[1:-1])),
+    '=': lambda *x: x[-1](tc.equal(*x[1:-1])),
+    'and': lambda *x: x[-1](newand(*x[1:-1])),
+    'or': lambda *x: x[-1](newor(*x[1:-1])),
 
     # Containers
     'vector': lambda *x: x[-1](vector(*x[1:-1])),
@@ -124,5 +133,5 @@ primitives = {
     'exponential': lambda *x: x[-1](tc.distributions.Exponential(*x[1:-1])),
     'uniform-continuous': lambda *x: x[-1](Uniform(*x[1:-1])),
     'flip': lambda *x: x[-1](Bernoulli(*x[1:-1])),
-    'discrete': lambda *x: x[-1](tc.distributions.Categorical(*x[1:-1])),
+    'discrete': lambda *x: x[-1](Categorical(*x[1:-1])),
 }
