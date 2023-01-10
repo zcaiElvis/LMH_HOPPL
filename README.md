@@ -1,1 +1,1 @@
-# CPSC532W_hw6
+# Rejuvenated SMC
